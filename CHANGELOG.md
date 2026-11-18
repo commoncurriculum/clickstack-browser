@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- `init` loads the replay recorder (rrweb) only when replay is on, so with `replay: false` the
+  page no longer downloads it, about 25 kB gzipped. Bundlers put it in a chunk of its own; the
+  IIFE build still includes it.
+
 ## 1.2.1
 
 ### Fixed
