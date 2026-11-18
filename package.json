@@ -46,6 +46,7 @@
   ],
   "scripts": {
     "build": "tsdown",
+    "prepare": "tsdown",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
     "lint": "eslint --max-warnings 0 .",
     "format": "prettier --write .",
