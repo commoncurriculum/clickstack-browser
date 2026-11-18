@@ -48,8 +48,7 @@ import {
 import { hasSignalPath, resolveUrl, signalUrl } from "../internal/endpoints.ts";
 import { pageState } from "../internal/global.ts";
 import { OtlpJsonExporter } from "../internal/otlp-exporter.ts";
-import { createReplayProvider } from "../replay/exporter.ts";
-import { Recorder } from "../replay/recorder.ts";
+import type { Recorder } from "../replay/recorder.ts";
 import {
   consoleExceptionProcessor,
   exceptionAttributes,
@@ -155,6 +154,12 @@ export interface ClickStackBrowserOptions {
    * non-string records an empty URL. Default: none, URLs are recorded as they are.
    */
   sanitizeUrl?: ((url: string) => string) | undefined;
+  /**
+   * Requests that fetch, XHR and resource timing do not record, such as long-polling requests. A
+   * string must equal the full request URL, and a regular expression is matched against it. The
+   * collector's own URLs are always ignored. Default: none.
+   */
+  ignoreUrls?: (string | RegExp)[] | undefined;
 }
 
 // Upstream sends up to 512 records per request, and a closing page can still send only about
@@ -180,6 +185,7 @@ const OPTION_NAMES = new Set(
     maskAllInputs: true,
     console: true,
     sanitizeUrl: true,
+    ignoreUrls: true,
   } satisfies Record<keyof ClickStackBrowserOptions, true>),
 );
 
@@ -337,7 +343,7 @@ async function start(
   const sanitize = sanitizeUrl ? { sanitizeUrl } : {};
 
   // The exporters' own requests must not become telemetry.
-  const ignoreUrls = [tracesUrl, logsUrl];
+  const ignoreUrls = [tracesUrl, logsUrl, ...(options.ignoreUrls ?? [])];
   const propagateTraceHeaderCorsUrls = (options.traceOrigins ?? []).map(
     toUrlPattern,
   );
@@ -427,25 +433,46 @@ async function start(
     diag.warn(`@clickhouse/clickstack-browser: ${warning}`);
   }
 
-  if (options.replay !== false && pageState().recording !== true) {
-    run.recorder = new Recorder({
+  if (options.replay !== false) {
+    await startRecorder(
+      options,
       sessionManager,
-      provider: createReplayProvider(
-        logsUrl,
-        options.apiKey,
-        resourceAttributes,
-      ),
-      maskAllText: options.maskAllText ?? true,
-      maskAllInputs: options.maskAllInputs ?? true,
+      logsUrl,
+      resourceAttributes,
       sanitizeUrl,
-    });
-
-    if (run.replayPaused) {
-      run.recorder.pause();
-    }
-
-    run.recorder.start();
+    );
   }
+}
+
+// Loaded on demand so pages without replay do not download rrweb
+async function startRecorder(
+  options: ClickStackBrowserOptions,
+  sessionManager: SessionManager,
+  logsUrl: string,
+  resourceAttributes: Attributes,
+  sanitizeUrl: ((url: string) => string) | undefined,
+): Promise<void> {
+  const [{ Recorder }, { createReplayProvider }] = await Promise.all([
+    import("../replay/recorder.ts"),
+    import("../replay/exporter.ts"),
+  ]);
+  if (run.stopping !== undefined || pageState().recording === true) {
+    return;
+  }
+
+  run.recorder = new Recorder({
+    sessionManager,
+    provider: createReplayProvider(logsUrl, options.apiKey, resourceAttributes),
+    maskAllText: options.maskAllText ?? true,
+    maskAllInputs: options.maskAllInputs ?? true,
+    sanitizeUrl,
+  });
+
+  if (run.replayPaused) {
+    run.recorder.pause();
+  }
+
+  run.recorder.start();
 }
 
 // Upstream matches a string against the full request URL exactly. An origin must match every URL

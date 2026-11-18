@@ -81,6 +81,38 @@ test("the ESM entries import and run without a page", async () => {
   assert.deepEqual(calls, []);
 });
 
+/**
+ * Lists the files an ESM entry in dist/ loads before it runs, following its static imports.
+ *
+ * @param {string} entry - The entry's file name in dist/.
+ * @returns {string[]} The file names, the entry included.
+ */
+function staticImports(entry) {
+  const seen = new Set([entry]);
+
+  for (const file of seen) {
+    const source = readFileSync(new URL(file, DIST), "utf8");
+    for (const [, imported] of source.matchAll(
+      /^(?:import|export)\b[^;]*?from\s*"\.\/([^"]+)"/gm,
+    )) {
+      seen.add(imported);
+    }
+  }
+
+  return [...seen];
+}
+
+test("the . entry loads the replay recorder only on demand", () => {
+  const files = staticImports("index.js");
+  const recorderFiles = files.filter((file) =>
+    readFileSync(new URL(file, DIST), "utf8").includes("@rrweb/record"),
+  );
+
+  assert.ok(files.length > 1);
+  assert.deepEqual(recorderFiles, []);
+  assert.ok(staticImports("replay.js").includes("recorder.js"));
+});
+
 test("the IIFE evaluates and runs in a context without a page", async () => {
   const context = vm.createContext({ URL, TextEncoder, performance });
   const calls = probe(/** @type {Record<string, unknown>} */ (context));
