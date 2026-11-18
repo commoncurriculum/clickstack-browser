@@ -154,6 +154,12 @@ export interface ClickStackBrowserOptions {
    * non-string records an empty URL. Default: none, URLs are recorded as they are.
    */
   sanitizeUrl?: ((url: string) => string) | undefined;
+  /**
+   * Requests that fetch, XHR and resource timing do not record, such as long-polling requests. A
+   * string must equal the full request URL, and a regular expression is matched against it. The
+   * collector's own URLs are always ignored. Default: none.
+   */
+  ignoreUrls?: (string | RegExp)[] | undefined;
 }
 
 // Upstream sends up to 512 records per request, and a closing page can still send only about
@@ -179,6 +185,7 @@ const OPTION_NAMES = new Set(
     maskAllInputs: true,
     console: true,
     sanitizeUrl: true,
+    ignoreUrls: true,
   } satisfies Record<keyof ClickStackBrowserOptions, true>),
 );
 
@@ -336,7 +343,7 @@ async function start(
   const sanitize = sanitizeUrl ? { sanitizeUrl } : {};
 
   // The exporters' own requests must not become telemetry.
-  const ignoreUrls = [tracesUrl, logsUrl];
+  const ignoreUrls = [tracesUrl, logsUrl, ...(options.ignoreUrls ?? [])];
   const propagateTraceHeaderCorsUrls = (options.traceOrigins ?? []).map(
     toUrlPattern,
   );
