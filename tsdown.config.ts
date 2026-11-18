@@ -56,9 +56,9 @@ export default defineConfig([
     target: "es2022",
     dts: true,
     sourcemap: true,
-    // Otherwise the chunk both entries share is named after one of its modules, with a hash.
+    // Chunks are named after one of their modules, without a hash.
     hash: false,
-    outputOptions: { chunkFileNames: "shared.js" },
+    outputOptions: { chunkFileNames: "[name].js" },
     define,
     plugins: [dropDanglingDtsMapComment],
     failOnWarn: true,
