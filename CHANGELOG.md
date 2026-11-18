@@ -2,11 +2,6 @@
 
 ## Unreleased
 
-### Added
-
-- `ignoreUrls` option: fetch, XHR and resource timing record nothing for these requests, such as
-  long polling. A string must equal the full URL, and a RegExp is matched against it.
-
 ### Changed
 
 - `init` loads the replay recorder (rrweb) only when replay is on, so with `replay: false` the

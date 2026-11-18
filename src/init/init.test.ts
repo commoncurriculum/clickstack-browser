@@ -189,36 +189,6 @@ test("adds trace headers to requests to the listed origins only", async () => {
   expect(headerOf("https://other-example-api.clickhouse.com/users")).toBeNull();
 });
 
-test("records no spans for requests to ignoreUrls", async () => {
-  const module = await load();
-  module.init({
-    endpoint: "/otel",
-    serviceName: "web-app",
-    replay: false,
-    ignoreUrls: [
-      "https://example-api.clickhouse.com/exact",
-      /\/longpoll(?:[/?#]|$)/,
-    ],
-  });
-
-  await started(module);
-
-  for (const url of [
-    "https://example-api.clickhouse.com/exact",
-    "https://example-api.clickhouse.com/socket/longpoll?token=1",
-    "https://example-api.clickhouse.com/recorded",
-  ]) {
-    await (await fetch(url)).text();
-  }
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  await module.shutdown();
-
-  const traces = await rumBodies("/otel/v1/traces");
-  expect(traces).toContain("https://example-api.clickhouse.com/recorded");
-  expect(traces).not.toContain("https://example-api.clickhouse.com/exact");
-  expect(traces).not.toContain("longpoll");
-});
-
 test("records the environment, and passes every URL through sanitizeUrl", async () => {
   const module = await load();
   module.init({

@@ -95,7 +95,9 @@ function staticImports(entry) {
     for (const [, imported] of source.matchAll(
       /^(?:import|export)\b[^;]*?from\s*"\.\/([^"]+)"/gm,
     )) {
-      seen.add(imported);
+      if (imported !== undefined) {
+        seen.add(imported);
+      }
     }
   }
 
