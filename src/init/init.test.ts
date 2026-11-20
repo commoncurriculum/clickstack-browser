@@ -6,6 +6,7 @@ import {
 import type { ReadableSpan } from "@opentelemetry/sdk-trace";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { logs } from "../logs-api.ts";
+import type { RecordFunction } from "../replay/recorder.ts";
 import { setAttributes } from "../rum/attributes.ts";
 import { recordException } from "../rum/exceptions.ts";
 import { setUser } from "../rum/user.ts";
@@ -631,6 +632,34 @@ test("records text and input values when masking is turned off, except rr-mask e
   expect(json).toContain("visible-text");
   expect(json).toContain("typed-value");
   expect(json).not.toContain("hidden-text");
+});
+
+test("records with the rrweb promised to it, which owns masking", async () => {
+  document.body.innerHTML = "<p>app-masked-text</p>";
+  const { record } = await import("@rrweb/record");
+  let calls = 0;
+  const given = Object.assign(
+    (options: Parameters<RecordFunction>[0]) => {
+      calls += 1;
+      return record(options);
+    },
+    { takeFullSnapshot: record.takeFullSnapshot, mirror: record.mirror },
+  );
+  const module = await load();
+  module.init({
+    endpoint: "/otel",
+    serviceName: "web-app",
+    record: Promise.resolve(given),
+  });
+
+  await started(module);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  await module.shutdown();
+  document.body.innerHTML = "";
+
+  expect(calls).toBe(1);
+  expect((await replayBodies()).join("")).toContain("app-masked-text");
 });
 
 test("pauseReplay before init sends no replay", async () => {

@@ -53,7 +53,11 @@ import {
 import { hasSignalPath, resolveUrl, signalUrl } from "../internal/endpoints.ts";
 import { pageState } from "../internal/global.ts";
 import { OtlpJsonExporter } from "../internal/otlp-exporter.ts";
-import type { Recorder, ReplayRecording } from "../replay/recorder.ts";
+import type {
+  RecordFunction,
+  Recorder,
+  ReplayRecording,
+} from "../replay/recorder.ts";
 import {
   consoleExceptionProcessor,
   exceptionAttributes,
@@ -92,7 +96,7 @@ const CONSOLE_METHODS: Record<ConsoleLevel, ConsoleMethod[]> = {
  * @public
  */
 export type ClickStackBrowserOptions = ClickStackBrowserCommonOptions &
-  ReplayRecording;
+  ReplayRecording<RecordFunction | Promise<RecordFunction>>;
 
 /**
  * Options of {@link init} other than {@link ReplayRecording}.
@@ -481,7 +485,12 @@ async function startRecorder(
     import("../replay/recorder.ts"),
     import("../replay/exporter.ts"),
     options.record ??
-      import("../replay/rrweb.ts").then((rrweb) => rrweb.record),
+      import("../replay/rrweb.ts").then((rrweb) =>
+        rrweb.maskedRecord({
+          maskAllText: options.maskAllText ?? true,
+          maskAllInputs: options.maskAllInputs ?? true,
+        }),
+      ),
   ]);
   if (run.stopping !== undefined || pageState().recording === true) {
     return;
@@ -491,8 +500,6 @@ async function startRecorder(
     sessionManager,
     record,
     provider: createReplayProvider(logsUrl, options.apiKey, resourceAttributes),
-    maskAllText: options.maskAllText ?? true,
-    maskAllInputs: options.maskAllInputs ?? true,
     sanitizeUrl,
   });
 
