@@ -454,7 +454,8 @@ async function startRecorder(
   const [{ Recorder }, { createReplayProvider }, record] = await Promise.all([
     import("../replay/recorder.ts"),
     import("../replay/exporter.ts"),
-    options.record ?? import("@rrweb/record").then((rrweb) => rrweb.record),
+    options.record ??
+      import("../replay/rrweb.ts").then((rrweb) => rrweb.record),
   ]);
   if (run.stopping !== undefined || pageState().recording === true) {
     return;
