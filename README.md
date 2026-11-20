@@ -97,7 +97,9 @@ The rest is fixed:
 - Instrumentations: fetch, XHR, errors, failed resource loads, navigation, user action, web vitals,
   navigation timing, resource timing, long task and console.
 - Sessions last at most 4 hours and end after 15 minutes without telemetry. They are stored in
-  `localStorage` and shared by the tabs of the origin.
+  `localStorage` and shared by the tabs of the origin. `sessionIdGenerator` and `sessionStore`
+  replace upstream's defaults, for example to use the app's own session id (`{ generateSessionId }`)
+  kept per tab (`{ save, get }`).
 - Nothing is sampled.
 - Diagnostics go to the browser console at WARN level.
 

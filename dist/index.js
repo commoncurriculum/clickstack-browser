@@ -448,7 +448,9 @@ const OPTION_NAMES = new Set(Object.keys({
 	console: true,
 	sanitizeUrl: true,
 	ignoreUrls: true,
-	spanProcessors: true
+	spanProcessors: true,
+	sessionIdGenerator: true,
+	sessionStore: true
 }));
 const run = {
 	sessionId: null,
@@ -502,8 +504,8 @@ function optionWarnings(options) {
 }
 async function start(options, tracesUrl, logsUrl, warnings) {
 	const sessionManager = createSessionManager({
-		sessionIdGenerator: createDefaultSessionIdGenerator(),
-		sessionStore: createLocalStorageSessionStore(),
+		sessionIdGenerator: options.sessionIdGenerator ?? createDefaultSessionIdGenerator(),
+		sessionStore: options.sessionStore ?? createLocalStorageSessionStore(),
 		maxDuration: 14400,
 		inactivityTimeout: 900
 	});

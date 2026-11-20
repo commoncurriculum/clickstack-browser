@@ -1,4 +1,5 @@
 import { Attributes } from "@opentelemetry/api";
+import { SessionIdGenerator, SessionStore } from "@opentelemetry/browser-sdk/session";
 import "@opentelemetry/sdk-logs";
 import { SpanProcessor } from "@opentelemetry/sdk-trace";
 /**
@@ -93,6 +94,16 @@ interface ClickStackBrowserOptions {
    * adds, and before the exporter. Default: none.
    */
   spanProcessors?: SpanProcessor[] | undefined;
+  /**
+   * Makes each new `session.id`, for example to use the app's own session id. Default: a random
+   * id.
+   */
+  sessionIdGenerator?: SessionIdGenerator | undefined;
+  /**
+   * Keeps the session across page loads. Default: `localStorage`, so tabs of the same origin
+   * share one session.
+   */
+  sessionStore?: SessionStore | undefined;
 }
 /**
  * Starts browser RUM and session replay on the upstream OpenTelemetry browser SDK.
