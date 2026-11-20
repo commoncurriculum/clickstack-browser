@@ -5,7 +5,6 @@ import type {
   SessionPublisher,
 } from "@opentelemetry/browser-sdk/session";
 import type { LoggerProvider } from "@opentelemetry/sdk-logs";
-import { record } from "@rrweb/record";
 import type { eventWithTime } from "@rrweb/types";
 import { pageState } from "../internal/global.ts";
 import { ATTR_SESSION_ID } from "../semconv.ts";
@@ -37,6 +36,54 @@ import { MutationLimiter } from "./limiter.ts";
 const MASK_ALL_INPUTS = { input: true, textarea: true, select: true };
 
 /**
+ * The rrweb calls that replay makes. `record` from `@rrweb/record` is one. An app that runs rrweb
+ * itself passes its own, which then owns masking.
+ *
+ * @public
+ */
+export interface RecordFunction {
+  (options: {
+    emit: (event: eventWithTime) => void;
+    errorHandler: (error: unknown) => boolean;
+    maskTextSelector?: string;
+    maskInputOptions: Record<string, boolean>;
+    userTriggeredOnInput: true;
+  }): (() => void) | undefined;
+  takeFullSnapshot(isCheckout?: boolean): void;
+  mirror: {
+    getNode(id: number): Node | null;
+    getMeta(node: Node): unknown;
+  };
+}
+
+/**
+ * Who runs rrweb for the replay. A passed `record` owns masking, so the masking options cannot be
+ * given beside it.
+ *
+ * @public
+ */
+export type ReplayRecording =
+  | {
+      record?: undefined;
+      /**
+       * Masks all text in the replay. With `false`, elements with the `rr-mask` class are still
+       * masked. Default: `true`.
+       */
+      maskAllText?: boolean | undefined;
+      /**
+       * Masks the values of all inputs, text areas and selects in the replay. With `false`, only
+       * passwords are masked. Default: `true`.
+       */
+      maskAllInputs?: boolean | undefined;
+    }
+  | {
+      /** An rrweb the app runs itself, for example to share one recording with another tool. */
+      record: RecordFunction;
+      maskAllText?: never;
+      maskAllInputs?: never;
+    };
+
+/**
  * Options of {@link Recorder}.
  *
  * @internal
@@ -44,6 +91,8 @@ const MASK_ALL_INPUTS = { input: true, textarea: true, select: true };
 export interface RecorderOptions {
   /** The upstream session manager, usable after `await start()`. */
   sessionManager: SessionProvider & SessionPublisher;
+  /** The rrweb that records the page. */
+  record: RecordFunction;
   /** The provider from `createReplayProvider`. The recorder handles shutdown. */
   provider: LoggerProvider;
   /** Masks all text (rrweb `maskTextSelector: '*'`) */
@@ -76,6 +125,7 @@ export interface RecorderOptions {
  */
 export class Recorder {
   readonly #sessionManager: SessionProvider & SessionPublisher;
+  readonly #record: RecordFunction;
   readonly #provider: LoggerProvider;
   readonly #sanitizeUrl: ((url: string) => string) | undefined;
   readonly #logger: ReturnType<LoggerProvider["getLogger"]>;
@@ -112,6 +162,7 @@ export class Recorder {
    */
   constructor(options: RecorderOptions) {
     this.#sessionManager = options.sessionManager;
+    this.#record = options.record;
     this.#provider = options.provider;
     this.#sanitizeUrl = options.sanitizeUrl;
     this.#logger = options.provider.getLogger(REPLAY_SCOPE_NAME, VERSION);
@@ -232,7 +283,7 @@ export class Recorder {
       this.#needsSnapshot = true;
       // rrweb emits its meta event and full snapshot before record() returns.
       this.#stopRrweb = () => undefined;
-      this.#stopRrweb = record({
+      this.#stopRrweb = this.#record({
         ...this.#recordOptions,
         emit: (event) => {
           this.#emit(event);
@@ -266,7 +317,7 @@ export class Recorder {
       this.#snapshotQueued = false;
 
       if (this.#stopRrweb !== undefined && !this.#isGated()) {
-        record.takeFullSnapshot(true);
+        this.#record.takeFullSnapshot(true);
       }
     });
   }
@@ -310,13 +361,13 @@ export class Recorder {
       return;
     }
 
-    if (isFromBlockedFrame(event)) {
+    if (isFromBlockedFrame(event, this.#record.mirror)) {
       return;
     }
 
     const kept = this.#limiter.filter(
       event,
-      (id) => record.mirror.getNode(id),
+      (id) => this.#record.mirror.getNode(id),
       performance.now(),
     );
 
@@ -402,7 +453,10 @@ export class Recorder {
 // that attaches it and every later event from inside it. rrweb marks the elements it blocks with
 // an rr_width attribute in its mirror, so an event is dropped when its node or an enclosing frame
 // carries one.
-function isFromBlockedFrame(event: eventWithTime): boolean {
+function isFromBlockedFrame(
+  event: eventWithTime,
+  mirror: RecordFunction["mirror"],
+): boolean {
   if (event.type !== EVENT_INCREMENTAL_SNAPSHOT) {
     return false;
   }
@@ -423,11 +477,11 @@ function isFromBlockedFrame(event: eventWithTime): boolean {
 
   for (
     let node: Node | null | undefined =
-      id === undefined ? null : record.mirror.getNode(id);
+      id === undefined ? null : mirror.getNode(id);
     node;
     node = (node.ownerDocument ?? (node as Document)).defaultView?.frameElement
   ) {
-    const meta = record.mirror.getMeta(node) as {
+    const meta = mirror.getMeta(node) as {
       attributes?: { rr_width?: unknown };
     } | null;
 

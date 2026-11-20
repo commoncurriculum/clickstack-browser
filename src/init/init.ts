@@ -48,7 +48,7 @@ import {
 import { hasSignalPath, resolveUrl, signalUrl } from "../internal/endpoints.ts";
 import { pageState } from "../internal/global.ts";
 import { OtlpJsonExporter } from "../internal/otlp-exporter.ts";
-import type { Recorder } from "../replay/recorder.ts";
+import type { Recorder, ReplayRecording } from "../replay/recorder.ts";
 import {
   consoleExceptionProcessor,
   exceptionAttributes,
@@ -86,7 +86,15 @@ const CONSOLE_METHODS: Record<ConsoleLevel, ConsoleMethod[]> = {
  *
  * @public
  */
-export interface ClickStackBrowserOptions {
+export type ClickStackBrowserOptions = ClickStackBrowserCommonOptions &
+  ReplayRecording;
+
+/**
+ * Options of {@link init} other than {@link ReplayRecording}.
+ *
+ * @public
+ */
+export interface ClickStackBrowserCommonOptions {
   /**
    * OTLP/HTTP base URL of the collector, for example `https://example-collector.clickhouse.com:4318`,
    * or a same-origin proxy path such as `/otel`. `/v1/traces` and `/v1/logs` are appended to its
@@ -135,16 +143,6 @@ export interface ClickStackBrowserOptions {
   traceOrigins?: (string | RegExp)[] | undefined;
   /** Records a session replay. Default: `true`. */
   replay?: boolean | undefined;
-  /**
-   * Masks all text in the replay. With `false`, elements with the `rr-mask` class are still
-   * masked. Default: `true`.
-   */
-  maskAllText?: boolean | undefined;
-  /**
-   * Masks the values of all inputs, text areas and selects in the replay. With `false`, only
-   * passwords are masked. Default: `true`.
-   */
-  maskAllInputs?: boolean | undefined;
   /** Console level captured as log events, or `false` for none. Default: `'error'`. */
   console?: ConsoleLevel | false | undefined;
   /**
@@ -181,6 +179,7 @@ const OPTION_NAMES = new Set(
     resourceAttributes: true,
     traceOrigins: true,
     replay: true,
+    record: true,
     maskAllText: true,
     maskAllInputs: true,
     console: true,
@@ -452,9 +451,10 @@ async function startRecorder(
   resourceAttributes: Attributes,
   sanitizeUrl: ((url: string) => string) | undefined,
 ): Promise<void> {
-  const [{ Recorder }, { createReplayProvider }] = await Promise.all([
+  const [{ Recorder }, { createReplayProvider }, record] = await Promise.all([
     import("../replay/recorder.ts"),
     import("../replay/exporter.ts"),
+    options.record ?? import("@rrweb/record").then((rrweb) => rrweb.record),
   ]);
   if (run.stopping !== undefined || pageState().recording === true) {
     return;
@@ -462,6 +462,7 @@ async function startRecorder(
 
   run.recorder = new Recorder({
     sessionManager,
+    record,
     provider: createReplayProvider(logsUrl, options.apiKey, resourceAttributes),
     maskAllText: options.maskAllText ?? true,
     maskAllInputs: options.maskAllInputs ?? true,

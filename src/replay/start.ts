@@ -7,15 +7,23 @@ import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
 import { signalUrl } from "../internal/endpoints.ts";
 import { pageState } from "../internal/global.ts";
 import { guardSanitizeUrl } from "../rum/sanitize-url.ts";
+import { record } from "@rrweb/record";
 import { createReplayProvider } from "./exporter.ts";
-import { Recorder } from "./recorder.ts";
+import { Recorder, type ReplayRecording } from "./recorder.ts";
 
 /**
  * Options of {@link startReplay}.
  *
  * @public
  */
-export interface ReplayStartOptions {
+export type ReplayStartOptions = ReplayStartCommonOptions & ReplayRecording;
+
+/**
+ * Options of {@link startReplay} other than {@link ReplayRecording}.
+ *
+ * @public
+ */
+export interface ReplayStartCommonOptions {
   /**
    * The upstream `SessionManager` that the SDK's session processors use, usable after
    * `await sessionManager.start()`. Replay records carry its session id.
@@ -35,10 +43,6 @@ export interface ReplayStartOptions {
   serviceName: string;
   /** Further resource attributes, same as the SDK's. Default: none. */
   resourceAttributes?: Attributes | undefined;
-  /** Masks all text in the recording. Default: `true`. */
-  maskAllText?: boolean | undefined;
-  /** Masks the values of all inputs/text areas/selects. When set to false only passwords are masked. Default: `true`. */
-  maskAllInputs?: boolean | undefined;
   /**
    * Rewrites the page URL recorded in replay meta events, for example to drop tokens from the
    * query string. Pass the same function as to the instrumentations' `sanitizeUrl`. A throw or a
@@ -114,6 +118,7 @@ export function startReplay(options: ReplayStartOptions): ReplayController {
 
   const recorder = new Recorder({
     sessionManager: options.sessionManager,
+    record: options.record ?? record,
     provider: createReplayProvider(url, options.apiKey, {
       ...options.resourceAttributes,
       [ATTR_SERVICE_NAME]: options.serviceName,
