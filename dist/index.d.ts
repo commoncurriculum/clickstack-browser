@@ -1,6 +1,6 @@
 import { Attributes } from "@opentelemetry/api";
 import "@opentelemetry/sdk-logs";
-import "@opentelemetry/sdk-trace";
+import { SpanProcessor } from "@opentelemetry/sdk-trace";
 /**
  * How much of the console is captured as `browser.console` log events. Each level includes the
  * more severe ones (`'info'` also captures `console.log`).
@@ -87,6 +87,12 @@ interface ClickStackBrowserOptions {
    * collector's own URLs are always ignored. Default: none.
    */
   ignoreUrls?: (string | RegExp)[] | undefined;
+  /**
+   * Further span processors, such as one that copies ended spans to another tool. They run after
+   * the session, document, user and attribute processors, so they see every attribute this package
+   * adds, and before the exporter. Default: none.
+   */
+  spanProcessors?: SpanProcessor[] | undefined;
 }
 /**
  * Starts browser RUM and session replay on the upstream OpenTelemetry browser SDK.

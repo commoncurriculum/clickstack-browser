@@ -447,7 +447,8 @@ const OPTION_NAMES = new Set(Object.keys({
 	maskAllInputs: true,
 	console: true,
 	sanitizeUrl: true,
-	ignoreUrls: true
+	ignoreUrls: true,
+	spanProcessors: true
 }));
 const run = {
 	sessionId: null,
@@ -591,6 +592,7 @@ async function start(options, tracesUrl, logsUrl, warnings) {
 			createDocumentSpanProcessor(documentProvider),
 			userSpanProcessor,
 			attributesSpanProcessor,
+			...options.spanProcessors ?? [],
 			new BatchSpanProcessor({
 				exporter: new OtlpJsonExporter(tracesUrl, options.apiKey, JsonTraceSerializer),
 				...BATCH_CONFIG
