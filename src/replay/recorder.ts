@@ -31,13 +31,10 @@ import {
 } from "./constants.ts";
 import { MutationLimiter } from "./limiter.ts";
 
-// rrweb's own maskAllInputs leaves <input type="hidden"> values.
-// Masking by tag name covers every input type.
-const MASK_ALL_INPUTS = { input: true, textarea: true, select: true };
-
 /**
- * The rrweb calls that replay makes. `record` from `@rrweb/record` is one. An app that runs rrweb
- * itself passes its own, which then owns masking.
+ * The rrweb calls that replay makes. An app that runs rrweb itself passes its own, which then owns
+ * masking. Its input events must carry `userTriggered` (rrweb's `userTriggeredOnInput: true`):
+ * only user-typed input counts as session activity and ends the wait for the first input.
  *
  * @public
  */
@@ -45,9 +42,6 @@ export interface RecordFunction {
   (options: {
     emit: (event: eventWithTime) => void;
     errorHandler: (error: unknown) => boolean;
-    maskTextSelector?: string;
-    maskInputOptions: Record<string, boolean>;
-    userTriggeredOnInput: true;
   }): (() => void) | undefined;
   takeFullSnapshot(isCheckout?: boolean): void;
   mirror: {
@@ -62,7 +56,7 @@ export interface RecordFunction {
  *
  * @public
  */
-export type ReplayRecording =
+export type ReplayRecording<AppRecord = RecordFunction> =
   | {
       record?: undefined;
       /**
@@ -78,7 +72,7 @@ export type ReplayRecording =
     }
   | {
       /** An rrweb the app runs itself, for example to share one recording with another tool. */
-      record: RecordFunction;
+      record: AppRecord;
       maskAllText?: never;
       maskAllInputs?: never;
     };
@@ -95,10 +89,6 @@ export interface RecorderOptions {
   record: RecordFunction;
   /** The provider from `createReplayProvider`. The recorder handles shutdown. */
   provider: LoggerProvider;
-  /** Masks all text (rrweb `maskTextSelector: '*'`) */
-  maskAllText: boolean;
-  /** Masks the values of all inputs, such as text areas and selects. Otherwise only passwords. */
-  maskAllInputs: boolean;
   /** Rewrites the page URL in meta events; already guarded, so it never throws. */
   sanitizeUrl?: ((url: string) => string) | undefined;
 }
@@ -129,11 +119,6 @@ export class Recorder {
   readonly #provider: LoggerProvider;
   readonly #sanitizeUrl: ((url: string) => string) | undefined;
   readonly #logger: ReturnType<LoggerProvider["getLogger"]>;
-  readonly #recordOptions: {
-    maskTextSelector?: string;
-    maskInputOptions: { password: boolean } | typeof MASK_ALL_INPUTS;
-    userTriggeredOnInput: true;
-  };
   readonly #limiter = new MutationLimiter(() => {
     this.#onThrottled();
   });
@@ -158,7 +143,7 @@ export class Recorder {
   /**
    * Creates a recorder. Nothing is recorded until {@link Recorder.start}.
    *
-   * @param options - The session manager, replay provider, the masking choices, and the URL rewriter.
+   * @param options - The session manager, the rrweb, the replay provider, and the URL rewriter.
    */
   constructor(options: RecorderOptions) {
     this.#sessionManager = options.sessionManager;
@@ -166,14 +151,6 @@ export class Recorder {
     this.#provider = options.provider;
     this.#sanitizeUrl = options.sanitizeUrl;
     this.#logger = options.provider.getLogger(REPLAY_SCOPE_NAME, VERSION);
-    this.#recordOptions = {
-      ...(options.maskAllText ? { maskTextSelector: "*" } : {}),
-      maskInputOptions: options.maskAllInputs
-        ? MASK_ALL_INPUTS
-        : { password: true },
-      // Differentiates user-typed input from values that scripts write
-      userTriggeredOnInput: true,
-    };
   }
 
   /** Starts following the session and recording. */
@@ -284,7 +261,6 @@ export class Recorder {
       // rrweb emits its meta event and full snapshot before record() returns.
       this.#stopRrweb = () => undefined;
       this.#stopRrweb = this.#record({
-        ...this.#recordOptions,
         emit: (event) => {
           this.#emit(event);
         },

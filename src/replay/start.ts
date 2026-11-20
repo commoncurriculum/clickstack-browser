@@ -7,9 +7,9 @@ import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
 import { signalUrl } from "../internal/endpoints.ts";
 import { pageState } from "../internal/global.ts";
 import { guardSanitizeUrl } from "../rum/sanitize-url.ts";
-import { record } from "@rrweb/record";
 import { createReplayProvider } from "./exporter.ts";
 import { Recorder, type ReplayRecording } from "./recorder.ts";
+import { maskedRecord } from "./rrweb.ts";
 
 /**
  * Options of {@link startReplay}.
@@ -118,13 +118,16 @@ export function startReplay(options: ReplayStartOptions): ReplayController {
 
   const recorder = new Recorder({
     sessionManager: options.sessionManager,
-    record: options.record ?? record,
+    record:
+      options.record ??
+      maskedRecord({
+        maskAllText: options.maskAllText ?? true,
+        maskAllInputs: options.maskAllInputs ?? true,
+      }),
     provider: createReplayProvider(url, options.apiKey, {
       ...options.resourceAttributes,
       [ATTR_SERVICE_NAME]: options.serviceName,
     }),
-    maskAllText: options.maskAllText ?? true,
-    maskAllInputs: options.maskAllInputs ?? true,
     sanitizeUrl: options.sanitizeUrl
       ? guardSanitizeUrl(options.sanitizeUrl)
       : undefined,

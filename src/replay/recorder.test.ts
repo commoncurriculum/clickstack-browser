@@ -11,6 +11,7 @@ import { record } from "@rrweb/record";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { pageState } from "../internal/global.ts";
 import { Recorder } from "./recorder.ts";
+import { maskedRecord } from "./rrweb.ts";
 
 interface Harness {
   recorder: Recorder;
@@ -53,10 +54,11 @@ function setup(
         startTimestamp: options.startTimestamp ?? Date.now(),
       }),
     } as never,
-    record,
+    record: maskedRecord({
+      maskAllText: options.maskAllText ?? true,
+      maskAllInputs: options.maskAllInputs ?? true,
+    }),
     provider,
-    maskAllText: options.maskAllText ?? true,
-    maskAllInputs: options.maskAllInputs ?? true,
     sanitizeUrl: options.sanitizeUrl,
   });
 

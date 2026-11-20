@@ -4,6 +4,9 @@
 
 ### Added
 
+- `record` option of `init` and `startReplay`: an rrweb the app runs itself, in place of the
+  package's own, for example to share one recording with another tool. It owns masking, so
+  `maskAllText` and `maskAllInputs` can't be given beside it. `init` also takes a promise of one.
 - `ignoreUrls` option: fetch, XHR and resource timing record nothing for these requests, such as
   long polling. A string must equal the full URL, and a RegExp is matched against it.
 - `sessionIdGenerator` and `sessionStore` options: upstream's session id generator and store, in
