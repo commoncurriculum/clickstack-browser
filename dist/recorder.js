@@ -127,11 +127,6 @@ var MutationLimiter = class {
 };
 // src/replay/recorder.ts
 var recorder_exports = /* @__PURE__ */ __exportAll({ Recorder: () => Recorder });
-const MASK_ALL_INPUTS = {
-	input: true,
-	textarea: true,
-	select: true
-};
 /**
 * Records the page with rrweb and emits each event as `rr-web.*` log records of the current
 * session.
@@ -158,7 +153,6 @@ var Recorder = class {
 	#provider;
 	#sanitizeUrl;
 	#logger;
-	#recordOptions;
 	#limiter = new MutationLimiter(() => {
 		this.#onThrottled();
 	});
@@ -180,7 +174,7 @@ var Recorder = class {
 	/**
 	* Creates a recorder. Nothing is recorded until {@link Recorder.start}.
 	*
-	* @param options - The session manager, replay provider, the masking choices, and the URL rewriter.
+	* @param options - The session manager, the rrweb, the replay provider, and the URL rewriter.
 	*/
 	constructor(options) {
 		this.#sessionManager = options.sessionManager;
@@ -188,11 +182,6 @@ var Recorder = class {
 		this.#provider = options.provider;
 		this.#sanitizeUrl = options.sanitizeUrl;
 		this.#logger = options.provider.getLogger(REPLAY_SCOPE_NAME, VERSION);
-		this.#recordOptions = {
-			...options.maskAllText ? { maskTextSelector: "*" } : {},
-			maskInputOptions: options.maskAllInputs ? MASK_ALL_INPUTS : { password: true },
-			userTriggeredOnInput: true
-		};
 	}
 	/** Starts following the session and recording. */
 	start() {
@@ -264,7 +253,6 @@ var Recorder = class {
 			this.#needsSnapshot = true;
 			this.#stopRrweb = () => void 0;
 			this.#stopRrweb = this.#record({
-				...this.#recordOptions,
 				emit: (event) => {
 					this.#emit(event);
 				},

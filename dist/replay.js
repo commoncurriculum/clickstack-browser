@@ -1,9 +1,9 @@
 import { c as guardSanitizeUrl, f as pageState, h as signalUrl } from "./semconv.js";
 import { t as createReplayProvider } from "./exporter.js";
 import { t as Recorder } from "./recorder.js";
+import { t as maskedRecord } from "./rrweb.js";
 import { diag } from "@opentelemetry/api";
 import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
-import { record } from "@rrweb/record";
 // src/replay/start.ts
 const NOT_RECORDING = {
 	pause: () => void 0,
@@ -46,13 +46,14 @@ function startReplay(options) {
 	}
 	const recorder = new Recorder({
 		sessionManager: options.sessionManager,
-		record: options.record ?? record,
+		record: options.record ?? maskedRecord({
+			maskAllText: options.maskAllText ?? true,
+			maskAllInputs: options.maskAllInputs ?? true
+		}),
 		provider: createReplayProvider(url, options.apiKey, {
 			...options.resourceAttributes,
 			[ATTR_SERVICE_NAME]: options.serviceName
 		}),
-		maskAllText: options.maskAllText ?? true,
-		maskAllInputs: options.maskAllInputs ?? true,
 		sanitizeUrl: options.sanitizeUrl ? guardSanitizeUrl(options.sanitizeUrl) : void 0
 	});
 	recorder.start();

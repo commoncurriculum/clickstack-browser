@@ -15,7 +15,7 @@ type ConsoleLevel = "error" | "warn" | "info" | "debug";
  *
  * @public
  */
-type ClickStackBrowserOptions = ClickStackBrowserCommonOptions & ReplayRecording;
+type ClickStackBrowserOptions = ClickStackBrowserCommonOptions & ReplayRecording<RecordFunction | Promise<RecordFunction>>;
 /**
  * Options of {@link init} other than {@link ReplayRecording}.
  *

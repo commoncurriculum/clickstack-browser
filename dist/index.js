@@ -611,15 +611,16 @@ async function startRecorder(options, sessionManager, logsUrl, resourceAttribute
 	const [{ Recorder }, { createReplayProvider }, record] = await Promise.all([
 		import("./recorder.js").then((n) => n.n),
 		import("./exporter.js").then((n) => n.n),
-		options.record ?? import("./rrweb.js").then((rrweb) => rrweb.record)
+		options.record ?? import("./rrweb.js").then((n) => n.n).then((rrweb) => rrweb.maskedRecord({
+			maskAllText: options.maskAllText ?? true,
+			maskAllInputs: options.maskAllInputs ?? true
+		}))
 	]);
 	if (run.stopping !== void 0 || pageState().recording === true) return;
 	run.recorder = new Recorder({
 		sessionManager,
 		record,
 		provider: createReplayProvider(logsUrl, options.apiKey, resourceAttributes),
-		maskAllText: options.maskAllText ?? true,
-		maskAllInputs: options.maskAllInputs ?? true,
 		sanitizeUrl
 	});
 	if (run.replayPaused) run.recorder.pause();

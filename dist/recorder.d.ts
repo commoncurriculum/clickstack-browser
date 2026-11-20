@@ -401,8 +401,9 @@ declare global {
   }
 }
 /**
- * The rrweb calls that replay makes. `record` from `@rrweb/record` is one. An app that runs rrweb
- * itself passes its own, which then owns masking.
+ * The rrweb calls that replay makes. An app that runs rrweb itself passes its own, which then owns
+ * masking. Its input events must carry `userTriggered` (rrweb's `userTriggeredOnInput: true`):
+ * only user-typed input counts as session activity and ends the wait for the first input.
  *
  * @public
  */
@@ -410,9 +411,6 @@ interface RecordFunction {
   (options: {
     emit: (event: eventWithTime) => void;
     errorHandler: (error: unknown) => boolean;
-    maskTextSelector?: string;
-    maskInputOptions: Record<string, boolean>;
-    userTriggeredOnInput: true;
   }): (() => void) | undefined;
   takeFullSnapshot(isCheckout?: boolean): void;
   mirror: {
@@ -426,7 +424,7 @@ interface RecordFunction {
  *
  * @public
  */
-type ReplayRecording = {
+type ReplayRecording<AppRecord = RecordFunction> = {
   record?: undefined;
   /**
    * Masks all text in the replay. With `false`, elements with the `rr-mask` class are still
@@ -440,7 +438,7 @@ type ReplayRecording = {
   maskAllInputs?: boolean | undefined;
 } | {
   /** An rrweb the app runs itself, for example to share one recording with another tool. */
-  record: RecordFunction;
+  record: AppRecord;
   maskAllText?: never;
   maskAllInputs?: never;
 };
