@@ -6,6 +6,10 @@
 
 - `ignoreUrls` option: fetch, XHR and resource timing record nothing for these requests, such as
   long polling. A string must equal the full URL, and a RegExp is matched against it.
+- `sessionIdGenerator` and `sessionStore` options: upstream's session id generator and store, in
+  place of a random id kept in `localStorage`, for example to use the app's own session id.
+- `spanProcessors` option: further span processors, such as one that copies ended spans to another
+  tool. They run after this package's processors and before the exporter.
 
 ### Changed
 

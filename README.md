@@ -83,6 +83,7 @@ by default. Set `maskAllText: false` to see the text ([Privacy](#privacy)).
 | `apiKey`             | None      | Ingestion key, sent as the `authorization` header. Anyone who loads the page can read it; to keep it private, send to a same-origin path whose server adds the header.                                    |
 | `traceOrigins`       | None      | Backends whose fetch and XHR requests carry trace context ([Trace propagation and CORS](#trace-propagation-and-cors)). A string matches every URL under that origin; a RegExp is matched against the URL. |
 | `ignoreUrls`         | None      | Requests that fetch, XHR and resource timing don't record, such as long polling. A string must equal the full URL; a RegExp is matched against it. The collector's own URLs are always ignored.           |
+| `spanProcessors`     | None      | Further span processors, such as one that copies ended spans to another tool. They see every attribute this package adds and run before the exporter.                                                     |
 | `replay`             | `true`    | `false` turns session replay off, and the recorder (rrweb) is never downloaded.                                                                                                                           |
 | `maskAllText`        | `true`    | Masks all text in the replay. With `false`, elements with the `rr-mask` class stay masked ([Privacy](#privacy)).                                                                                          |
 | `maskAllInputs`      | `true`    | Masks the values of all inputs, text areas and selects. With `false`, only passwords are masked.                                                                                                          |     |
@@ -96,7 +97,9 @@ The rest is fixed:
 - Instrumentations: fetch, XHR, errors, failed resource loads, navigation, user action, web vitals,
   navigation timing, resource timing, long task and console.
 - Sessions last at most 4 hours and end after 15 minutes without telemetry. They are stored in
-  `localStorage` and shared by the tabs of the origin.
+  `localStorage` and shared by the tabs of the origin. `sessionIdGenerator` and `sessionStore`
+  replace upstream's defaults, for example to use the app's own session id (`{ generateSessionId }`)
+  kept per tab (`{ save, get }`).
 - Nothing is sampled.
 - Diagnostics go to the browser console at WARN level.
 
