@@ -448,7 +448,10 @@ const OPTION_NAMES = new Set(Object.keys({
 	maskAllInputs: true,
 	console: true,
 	sanitizeUrl: true,
-	ignoreUrls: true
+	ignoreUrls: true,
+	spanProcessors: true,
+	sessionIdGenerator: true,
+	sessionStore: true
 }));
 const run = {
 	sessionId: null,
@@ -502,8 +505,8 @@ function optionWarnings(options) {
 }
 async function start(options, tracesUrl, logsUrl, warnings) {
 	const sessionManager = createSessionManager({
-		sessionIdGenerator: createDefaultSessionIdGenerator(),
-		sessionStore: createLocalStorageSessionStore(),
+		sessionIdGenerator: options.sessionIdGenerator ?? createDefaultSessionIdGenerator(),
+		sessionStore: options.sessionStore ?? createLocalStorageSessionStore(),
 		maxDuration: 14400,
 		inactivityTimeout: 900
 	});
@@ -592,6 +595,7 @@ async function start(options, tracesUrl, logsUrl, warnings) {
 			createDocumentSpanProcessor(documentProvider),
 			userSpanProcessor,
 			attributesSpanProcessor,
+			...options.spanProcessors ?? [],
 			new BatchSpanProcessor({
 				exporter: new OtlpJsonExporter(tracesUrl, options.apiKey, JsonTraceSerializer),
 				...BATCH_CONFIG
@@ -607,7 +611,7 @@ async function startRecorder(options, sessionManager, logsUrl, resourceAttribute
 	const [{ Recorder }, { createReplayProvider }, record] = await Promise.all([
 		import("./recorder.js").then((n) => n.n),
 		import("./exporter.js").then((n) => n.n),
-		options.record ?? import("@rrweb/record").then((rrweb) => rrweb.record)
+		options.record ?? import("./rrweb.js").then((rrweb) => rrweb.record)
 	]);
 	if (run.stopping !== void 0 || pageState().recording === true) return;
 	run.recorder = new Recorder({

@@ -1,7 +1,8 @@
 import { n as ReplayRecording, t as RecordFunction } from "./recorder.js";
 import { Attributes } from "@opentelemetry/api";
+import { SessionIdGenerator, SessionStore } from "@opentelemetry/browser-sdk/session";
 import "@opentelemetry/sdk-logs";
-import "@opentelemetry/sdk-trace";
+import { SpanProcessor } from "@opentelemetry/sdk-trace";
 /**
  * How much of the console is captured as `browser.console` log events. Each level includes the
  * more severe ones (`'info'` also captures `console.log`).
@@ -84,6 +85,22 @@ interface ClickStackBrowserCommonOptions {
    * collector's own URLs are always ignored. Default: none.
    */
   ignoreUrls?: (string | RegExp)[] | undefined;
+  /**
+   * Further span processors, such as one that copies ended spans to another tool. They run after
+   * the session, document, user and attribute processors, so they see every attribute this package
+   * adds, and before the exporter. Default: none.
+   */
+  spanProcessors?: SpanProcessor[] | undefined;
+  /**
+   * Makes each new `session.id`, for example to use the app's own session id. Default: a random
+   * id.
+   */
+  sessionIdGenerator?: SessionIdGenerator | undefined;
+  /**
+   * Keeps the session across page loads. Default: `localStorage`, so tabs of the same origin
+   * share one session.
+   */
+  sessionStore?: SessionStore | undefined;
 }
 /**
  * Starts browser RUM and session replay on the upstream OpenTelemetry browser SDK.
