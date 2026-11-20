@@ -37,7 +37,10 @@ import {
 } from "@opentelemetry/otlp-transformer";
 import { detectResources } from "@opentelemetry/resources";
 import { BatchLogRecordProcessor } from "@opentelemetry/sdk-logs";
-import { BatchSpanProcessor } from "@opentelemetry/sdk-trace";
+import {
+  BatchSpanProcessor,
+  type SpanProcessor,
+} from "@opentelemetry/sdk-trace";
 import {
   ATTR_DEPLOYMENT_ENVIRONMENT_NAME,
   ATTR_SERVICE_NAME,
@@ -160,6 +163,12 @@ export interface ClickStackBrowserOptions {
    * collector's own URLs are always ignored. Default: none.
    */
   ignoreUrls?: (string | RegExp)[] | undefined;
+  /**
+   * Further span processors, such as one that copies ended spans to another tool. They run after
+   * the session, document, user and attribute processors, so they see every attribute this package
+   * adds, and before the exporter. Default: none.
+   */
+  spanProcessors?: SpanProcessor[] | undefined;
 }
 
 // Upstream sends up to 512 records per request, and a closing page can still send only about
@@ -186,6 +195,7 @@ const OPTION_NAMES = new Set(
     console: true,
     sanitizeUrl: true,
     ignoreUrls: true,
+    spanProcessors: true,
   } satisfies Record<keyof ClickStackBrowserOptions, true>),
 );
 
@@ -416,6 +426,7 @@ async function start(
         createDocumentSpanProcessor(documentProvider),
         userSpanProcessor,
         attributesSpanProcessor,
+        ...(options.spanProcessors ?? []),
         new BatchSpanProcessor({
           exporter: new OtlpJsonExporter(
             tracesUrl,

@@ -1,5 +1,6 @@
 import { context, diag, propagation, trace } from "@opentelemetry/api";
 import { SessionManager } from "@opentelemetry/browser-sdk/session";
+import type { ReadableSpan } from "@opentelemetry/sdk-trace";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { logs } from "../logs-api.ts";
 import { setAttributes } from "../rum/attributes.ts";
@@ -217,6 +218,42 @@ test("records no spans for requests to ignoreUrls", async () => {
   expect(traces).toContain("https://example-api.clickhouse.com/recorded");
   expect(traces).not.toContain("https://example-api.clickhouse.com/exact");
   expect(traces).not.toContain("longpoll");
+});
+
+test("hands ended spans to spanProcessors with the attributes this package adds", async () => {
+  const ended: ReadableSpan[] = [];
+  const module = await load();
+  setUser({ id: "user-1" });
+  setAttributes({ "app.plan": "pro" });
+  module.init({
+    endpoint: "/otel",
+    serviceName: "web-app",
+    replay: false,
+    spanProcessors: [
+      {
+        onStart: () => undefined,
+        onEnd: (span) => ended.push(span),
+        forceFlush: () => Promise.resolve(),
+        shutdown: () => Promise.resolve(),
+      },
+    ],
+  });
+
+  const sessionId = await started(module);
+  trace.getTracer("test").startSpan("action example").end();
+  await module.shutdown();
+
+  expect(ended.map((span) => [span.name, span.attributes])).toEqual([
+    [
+      "action example",
+      expect.objectContaining({
+        "session.id": sessionId,
+        "user.id": "user-1",
+        "app.plan": "pro",
+      }),
+    ],
+  ]);
+  expect(await rumBodies("/otel/v1/traces")).toContain("action example");
 });
 
 test("records the environment, and passes every URL through sanitizeUrl", async () => {

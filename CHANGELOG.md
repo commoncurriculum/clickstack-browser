@@ -6,6 +6,8 @@
 
 - `ignoreUrls` option: fetch, XHR and resource timing record nothing for these requests, such as
   long polling. A string must equal the full URL, and a RegExp is matched against it.
+- `spanProcessors` option: further span processors, such as one that copies ended spans to another
+  tool. They run after this package's processors and before the exporter.
 
 ### Changed
 
