@@ -1,5 +1,8 @@
 import { context, diag, propagation, trace } from "@opentelemetry/api";
-import { SessionManager } from "@opentelemetry/browser-sdk/session";
+import {
+  SessionManager,
+  type Session,
+} from "@opentelemetry/browser-sdk/session";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { logs } from "../logs-api.ts";
@@ -254,6 +257,32 @@ test("hands ended spans to spanProcessors with the attributes this package adds"
     ],
   ]);
   expect(await rumBodies("/otel/v1/traces")).toContain("action example");
+});
+
+test("takes session ids from sessionIdGenerator and keeps sessions in sessionStore", async () => {
+  let stored: Session | null = null;
+  const module = await load();
+  module.init({
+    endpoint: "/otel",
+    serviceName: "web-app",
+    replay: false,
+    sessionIdGenerator: { generateSessionId: () => "app-session-1" },
+    sessionStore: {
+      save: (session) => {
+        stored = session;
+        return Promise.resolve();
+      },
+      get: () => Promise.resolve(stored),
+    },
+  });
+
+  expect(await started(module)).toBe("app-session-1");
+  trace.getTracer("test").startSpan("action example").end();
+  await module.shutdown();
+
+  expect(stored).toMatchObject({ id: "app-session-1" });
+  expect(storedSessionId()).toBeUndefined();
+  expect(await rumBodies("/otel/v1/traces")).toContain("app-session-1");
 });
 
 test("records the environment, and passes every URL through sanitizeUrl", async () => {

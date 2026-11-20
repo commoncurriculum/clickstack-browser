@@ -28,7 +28,9 @@ import {
   createSessionLogRecordProcessor,
   createSessionManager,
   createSessionSpanProcessor,
+  type SessionIdGenerator,
   type SessionManager,
+  type SessionStore,
 } from "@opentelemetry/browser-sdk/session";
 import { LongTaskInstrumentation } from "@opentelemetry/instrumentation-long-task";
 import {
@@ -169,6 +171,16 @@ export interface ClickStackBrowserOptions {
    * adds, and before the exporter. Default: none.
    */
   spanProcessors?: SpanProcessor[] | undefined;
+  /**
+   * Makes each new `session.id`, for example to use the app's own session id. Default: a random
+   * id.
+   */
+  sessionIdGenerator?: SessionIdGenerator | undefined;
+  /**
+   * Keeps the session across page loads. Default: `localStorage`, so tabs of the same origin
+   * share one session.
+   */
+  sessionStore?: SessionStore | undefined;
 }
 
 // Upstream sends up to 512 records per request, and a closing page can still send only about
@@ -196,6 +208,8 @@ const OPTION_NAMES = new Set(
     sanitizeUrl: true,
     ignoreUrls: true,
     spanProcessors: true,
+    sessionIdGenerator: true,
+    sessionStore: true,
   } satisfies Record<keyof ClickStackBrowserOptions, true>),
 );
 
@@ -309,8 +323,9 @@ async function start(
   warnings: string[],
 ): Promise<void> {
   const sessionManager = createSessionManager({
-    sessionIdGenerator: createDefaultSessionIdGenerator(),
-    sessionStore: createLocalStorageSessionStore(),
+    sessionIdGenerator:
+      options.sessionIdGenerator ?? createDefaultSessionIdGenerator(),
+    sessionStore: options.sessionStore ?? createLocalStorageSessionStore(),
     maxDuration: 4 * 60 * 60,
     inactivityTimeout: 15 * 60,
   });
