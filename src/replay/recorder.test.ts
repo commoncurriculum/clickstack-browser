@@ -53,6 +53,7 @@ function setup(
         startTimestamp: options.startTimestamp ?? Date.now(),
       }),
     } as never,
+    record,
     provider,
     maskAllText: options.maskAllText ?? true,
     maskAllInputs: options.maskAllInputs ?? true,

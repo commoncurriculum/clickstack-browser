@@ -5,4 +5,9 @@
  */
 
 export { startReplay } from "./replay/start.ts";
-export type { ReplayController, ReplayStartOptions } from "./replay/start.ts";
+export type {
+  ReplayController,
+  ReplayStartCommonOptions,
+  ReplayStartOptions,
+} from "./replay/start.ts";
+export type { RecordFunction, ReplayRecording } from "./replay/recorder.ts";

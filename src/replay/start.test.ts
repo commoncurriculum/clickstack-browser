@@ -1,6 +1,8 @@
 import { diag } from "@opentelemetry/api";
+import { record } from "@rrweb/record";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { pageState } from "../internal/global.ts";
+import type { RecordFunction } from "./recorder.ts";
 import { startReplay } from "./start.ts";
 
 const sessionManager = {
@@ -64,6 +66,30 @@ test("sends the recording to the endpoint with the given service name and key", 
     '{"key":"session.id","value":{"stringValue":"session-a"}}',
   );
   expect(pageState().recording).toBe(false);
+});
+
+test("records with the rrweb it is given", async () => {
+  let calls = 0;
+  const given = Object.assign(
+    (options: Parameters<RecordFunction>[0]) => {
+      calls += 1;
+      return record(options);
+    },
+    { takeFullSnapshot: record.takeFullSnapshot, mirror: record.mirror },
+  );
+  const replay = startReplay({
+    sessionManager,
+    endpoint: "/otel",
+    serviceName: "web-shop",
+    record: given,
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  await replay.shutdown();
+
+  expect(calls).toBe(1);
+  const json = await gunzip(fetchMock.mock.calls[0]?.[1]?.body);
+  expect(json).toContain(String.raw`\"type\":2`);
 });
 
 test("records nothing with an invalid endpoint or while another recording runs", async () => {

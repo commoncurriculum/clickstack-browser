@@ -16,7 +16,12 @@ export {
   shutdown,
   startNewSession,
 } from "./init/init.ts";
-export type { ClickStackBrowserOptions, ConsoleLevel } from "./init/init.ts";
+export type {
+  ClickStackBrowserCommonOptions,
+  ClickStackBrowserOptions,
+  ConsoleLevel,
+} from "./init/init.ts";
+export type { RecordFunction, ReplayRecording } from "./replay/recorder.ts";
 export { setAttributes } from "./rum/attributes.ts";
 export { recordException } from "./rum/exceptions.ts";
 export { setUser } from "./rum/user.ts";
