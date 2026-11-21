@@ -1,5 +1,6 @@
 import type { Attributes } from "@opentelemetry/api";
 import { SeverityNumber } from "@opentelemetry/api-logs";
+import { ErrorsInstrumentation } from "@opentelemetry/browser-instrumentation/experimental/errors";
 import type { LogRecordProcessor } from "@opentelemetry/sdk-logs";
 import {
   ATTR_EXCEPTION_MESSAGE,
@@ -282,6 +283,33 @@ export function listenForResourceErrors(
   return () => {
     window.removeEventListener("error", onError, true);
   };
+}
+
+/**
+ * Upstream's errors instrumentation with {@link exceptionAttributes}, which also records failed
+ * resource loads ({@link listenForResourceErrors}) while it is enabled.
+ *
+ * @internal
+ */
+export class ErrorsAndResourceLoadsInstrumentation extends ErrorsInstrumentation {
+  #sanitizeUrl: ((url: string) => string) | undefined;
+  #stopResourceErrors: (() => void) | undefined;
+
+  constructor(sanitizeUrl: ((url: string) => string) | undefined) {
+    super({ enabled: false, applyCustomAttributes: exceptionAttributes });
+    this.#sanitizeUrl = sanitizeUrl;
+  }
+
+  override enable(): void {
+    super.enable();
+    this.#stopResourceErrors ??= listenForResourceErrors(this.#sanitizeUrl);
+  }
+
+  override disable(): void {
+    super.disable();
+    this.#stopResourceErrors?.();
+    this.#stopResourceErrors = undefined;
+  }
 }
 
 function resourceUrl(element: Element): string {

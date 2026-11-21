@@ -8,7 +8,6 @@ import {
   ConsoleInstrumentation,
   type ConsoleMethod,
 } from "@opentelemetry/browser-instrumentation/experimental/console";
-import { ErrorsInstrumentation } from "@opentelemetry/browser-instrumentation/experimental/errors";
 import { FetchInstrumentation } from "@opentelemetry/browser-instrumentation/experimental/fetch";
 import { NavigationInstrumentation } from "@opentelemetry/browser-instrumentation/experimental/navigation";
 import { NavigationTimingInstrumentation } from "@opentelemetry/browser-instrumentation/experimental/navigation-timing";
@@ -60,8 +59,7 @@ import type {
 } from "../replay/recorder.ts";
 import {
   consoleExceptionProcessor,
-  exceptionAttributes,
-  listenForResourceErrors,
+  ErrorsAndResourceLoadsInstrumentation,
   serializeConsoleArgs,
 } from "../rum/exceptions.ts";
 import {
@@ -268,7 +266,6 @@ interface Run {
   stopping?: Promise<void>;
   sessionManager?: SessionManager;
   sdk?: WebSdk;
-  stopResourceErrors?: () => void;
   stopInteractions?: () => void;
   recorder?: Recorder;
 }
@@ -385,10 +382,8 @@ async function start(
 
   // Loaded on demand because the module reads `window` when imported, which breaks server-side
   // imports of this package.
-  const resourceTiming =
-    options.resourceTiming === false
-      ? undefined
-      : await import("@opentelemetry/browser-instrumentation/experimental/resource-timing");
+  const { ResourceTimingInstrumentation } =
+    await import("@opentelemetry/browser-instrumentation/experimental/resource-timing");
   if (run.stopping !== undefined) {
     return;
   }
@@ -429,67 +424,41 @@ async function start(
   // Constructed disabled: an enabled instrumentation starts in its constructor before the SDK's
   // providers exist and loses its first events (such as the initial navigation)
   const instrumentations = [
-    ...(options.fetch === false
-      ? []
-      : [
-          new FetchInstrumentation({
-            enabled: false,
-            ignoreUrls,
-            propagateTraceHeaderCorsUrls,
-            ...sanitize,
-          }),
-        ]),
-    ...(options.xhr === false
-      ? []
-      : [
-          new XhrInstrumentation({
-            enabled: false,
-            ignoreUrls,
-            propagateTraceHeaderCorsUrls,
-            ...sanitize,
-          }),
-        ]),
-    ...(resourceTiming
-      ? [
-          new resourceTiming.ResourceTimingInstrumentation({
-            enabled: false,
-            ignoreUrls,
-          }),
-        ]
-      : []),
-    ...(options.errors === false
-      ? []
-      : [
-          new ErrorsInstrumentation({
-            enabled: false,
-            applyCustomAttributes: exceptionAttributes,
-          }),
-        ]),
-    ...(options.navigation === false
-      ? []
-      : [new NavigationInstrumentation({ enabled: false, ...sanitize })]),
-    ...(options.navigationTiming === false
-      ? []
-      : [new NavigationTimingInstrumentation({ enabled: false })]),
-    ...(options.userAction === false
-      ? []
-      : [new UserActionInstrumentation({ enabled: false })]),
-    ...(options.webVitals === false
-      ? []
-      : [new WebVitalsInstrumentation({ enabled: false })]),
-    ...(options.longTask === false
-      ? []
-      : [new LongTaskInstrumentation({ enabled: false })]),
-    ...(consoleLevel
-      ? [
-          new ConsoleInstrumentation({
-            enabled: false,
-            logMethods: CONSOLE_METHODS[consoleLevel],
-            messageSerializer: serializeConsoleArgs,
-          }),
-        ]
-      : []),
-  ];
+    options.fetch !== false &&
+      new FetchInstrumentation({
+        enabled: false,
+        ignoreUrls,
+        propagateTraceHeaderCorsUrls,
+        ...sanitize,
+      }),
+    options.xhr !== false &&
+      new XhrInstrumentation({
+        enabled: false,
+        ignoreUrls,
+        propagateTraceHeaderCorsUrls,
+        ...sanitize,
+      }),
+    options.resourceTiming !== false &&
+      new ResourceTimingInstrumentation({ enabled: false, ignoreUrls }),
+    options.errors !== false &&
+      new ErrorsAndResourceLoadsInstrumentation(sanitizeUrl),
+    options.navigation !== false &&
+      new NavigationInstrumentation({ enabled: false, ...sanitize }),
+    options.navigationTiming !== false &&
+      new NavigationTimingInstrumentation({ enabled: false }),
+    options.userAction !== false &&
+      new UserActionInstrumentation({ enabled: false }),
+    options.webVitals !== false &&
+      new WebVitalsInstrumentation({ enabled: false }),
+    options.longTask !== false &&
+      new LongTaskInstrumentation({ enabled: false }),
+    consoleLevel &&
+      new ConsoleInstrumentation({
+        enabled: false,
+        logMethods: CONSOLE_METHODS[consoleLevel],
+        messageSerializer: serializeConsoleArgs,
+      }),
+  ].filter((instrumentation) => instrumentation !== false);
 
   const documentProvider = createLocationDocumentProvider(sanitize);
   // No exportConfig, or upstream adds its own exporter too
@@ -539,9 +508,6 @@ async function start(
     },
     instrumentations,
   });
-  if (options.errors !== false) {
-    run.stopResourceErrors = listenForResourceErrors(sanitizeUrl);
-  }
   if (options.interactions) {
     run.stopInteractions = listenForInteractions();
   }
@@ -706,7 +672,6 @@ async function stop(): Promise<void> {
   try {
     await run.started;
     await run.recorder?.shutdown();
-    run.stopResourceErrors?.();
     run.stopInteractions?.();
     await run.sdk?.shutdown();
   } catch (error) {

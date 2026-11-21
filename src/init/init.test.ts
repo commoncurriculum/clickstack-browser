@@ -707,61 +707,25 @@ test("captures no console calls with console false, and matches origins given as
   expect(new Headers(request?.init?.headers).get("traceparent")).not.toBeNull();
 });
 
-test("records no resource timing events with resourceTiming false, and still records fetch spans", async () => {
-  const module = await load();
-  module.init({
-    endpoint: "/otel",
-    serviceName: "web-app",
-    replay: false,
-    resourceTiming: false,
-  });
-  await started(module);
+// What each instrumentation option's instrumentation sends, and to which signal
+const INSTRUMENTATION_OUTPUT = {
+  fetch: ["/otel/v1/traces", "/api/fetch-items"],
+  xhr: ["/otel/v1/traces", "/api/xhr-items"],
+  errors: ["/otel/v1/logs", "ResourceLoadError"],
+  navigation: ["/otel/v1/logs", '"eventName":"browser.navigation"'],
+  navigationTiming: [
+    "/otel/v1/logs",
+    '"eventName":"browser.navigation_timing"',
+  ],
+  resourceTiming: ["/otel/v1/logs", '"eventName":"browser.resource_timing"'],
+  userAction: ["/otel/v1/logs", '"eventName":"browser.user_action.click"'],
+  webVitals: ["/otel/v1/logs", '"eventName":"browser.web_vital"'],
+  longTask: ["/otel/v1/traces", '"name":"longtask"'],
+} as const;
 
-  await (await fetch("/api/items")).text();
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  await module.shutdown();
+async function causeEveryInstrumentation(): Promise<void> {
+  await (await fetch("/api/fetch-items")).text();
 
-  expect(await rumBodies("/otel/v1/logs")).not.toContain(
-    '"eventName":"browser.resource_timing"',
-  );
-  expect(await rumBodies("/otel/v1/traces")).toContain("/api/items");
-});
-
-test("records user actions, navigation and resource timing by default", async () => {
-  const module = await load();
-  module.init({ endpoint: "/otel", serviceName: "web-app", replay: false });
-  await started(module);
-
-  document.body.click();
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  await module.shutdown();
-
-  const logs = await rumBodies("/otel/v1/logs");
-  expect(logs).toContain('"eventName":"browser.resource_timing"');
-  expect(logs).toContain('"eventName":"browser.user_action.click"');
-  expect(logs).toContain('"eventName":"browser.navigation"');
-  expect(logs).toContain('"eventName":"browser.navigation_timing"');
-});
-
-test("records nothing from the instrumentations turned off", async () => {
-  const module = await load();
-  module.init({
-    endpoint: "/otel",
-    serviceName: "web-app",
-    replay: false,
-    fetch: false,
-    xhr: false,
-    errors: false,
-    navigation: false,
-    navigationTiming: false,
-    resourceTiming: false,
-    userAction: false,
-    webVitals: false,
-    longTask: false,
-  });
-  await started(module);
-
-  await (await fetch("/api/items")).text();
   const request = new XMLHttpRequest();
   const loaded = new Promise((resolve) => {
     request.addEventListener("loadend", resolve);
@@ -769,7 +733,9 @@ test("records nothing from the instrumentations turned off", async () => {
   request.open("GET", "/api/xhr-items");
   request.send();
   await loaded;
+
   document.body.click();
+
   const image = document.createElement("img");
   const failed = new Promise((resolve) => {
     image.addEventListener("error", resolve);
@@ -778,11 +744,42 @@ test("records nothing from the instrumentations turned off", async () => {
   document.body.append(image);
   await failed;
   image.remove();
-  await module.shutdown();
 
-  expect(await rumBodies("/otel/v1/logs")).toBe("");
-  expect(await rumBodies("/otel/v1/traces")).toBe("");
-});
+  const longTaskEnd = performance.now() + 80;
+  while (performance.now() < longTaskEnd) {
+    Math.random();
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 100));
+}
+
+test.each(Object.keys(INSTRUMENTATION_OUTPUT))(
+  "%s: false turns off only that instrumentation",
+  async (option) => {
+    const module = await load();
+    module.init({
+      endpoint: "/otel",
+      serviceName: "web-app",
+      replay: false,
+      [option]: false,
+    });
+    await started(module);
+
+    await causeEveryInstrumentation();
+    await module.shutdown();
+
+    for (const [name, [path, output]] of Object.entries(
+      INSTRUMENTATION_OUTPUT,
+    )) {
+      const sent = await rumBodies(path);
+      if (name === option) {
+        expect(sent, name).not.toContain(output);
+      } else {
+        expect(sent, name).toContain(output);
+      }
+    }
+  },
+);
 
 test("shutdown during start leaves nothing running", async () => {
   const module = await load();
