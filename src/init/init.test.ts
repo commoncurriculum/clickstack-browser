@@ -781,6 +781,63 @@ test.each(Object.keys(INSTRUMENTATION_OUTPUT))(
   },
 );
 
+test("records user actions, navigation and resource timing by default", async () => {
+  const module = await load();
+  module.init({ endpoint: "/otel", serviceName: "web-app", replay: false });
+  await started(module);
+
+  document.body.click();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  await module.shutdown();
+
+  const logs = await rumBodies("/otel/v1/logs");
+  expect(logs).toContain('"eventName":"browser.resource_timing"');
+  expect(logs).toContain('"eventName":"browser.user_action.click"');
+  expect(logs).toContain('"eventName":"browser.navigation"');
+  expect(logs).toContain('"eventName":"browser.navigation_timing"');
+});
+
+test("records nothing from the instrumentations turned off", async () => {
+  const module = await load();
+  module.init({
+    endpoint: "/otel",
+    serviceName: "web-app",
+    replay: false,
+    fetch: false,
+    xhr: false,
+    errors: false,
+    navigation: false,
+    navigationTiming: false,
+    resourceTiming: false,
+    userAction: false,
+    webVitals: false,
+    longTask: false,
+  });
+  await started(module);
+
+  await (await fetch("/api/items")).text();
+  const request = new XMLHttpRequest();
+  const loaded = new Promise((resolve) => {
+    request.addEventListener("loadend", resolve);
+  });
+  request.open("GET", "/api/xhr-items");
+  request.send();
+  await loaded;
+  document.body.click();
+  const image = document.createElement("img");
+  const failed = new Promise((resolve) => {
+    image.addEventListener("error", resolve);
+  });
+  image.src = "/missing-image.png";
+  document.body.append(image);
+  await failed;
+  image.remove();
+  await module.shutdown();
+
+  expect(await rumBodies("/otel/v1/logs")).toBe("");
+  expect(await rumBodies("/otel/v1/traces")).toBe("");
+});
+
 test("shutdown during start leaves nothing running", async () => {
   const module = await load();
   module.init({ endpoint: "/otel", serviceName: "web-app" });
