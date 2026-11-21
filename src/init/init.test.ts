@@ -1,4 +1,10 @@
-import { context, diag, propagation, trace } from "@opentelemetry/api";
+import {
+  context,
+  diag,
+  propagation,
+  ROOT_CONTEXT,
+  trace,
+} from "@opentelemetry/api";
 import {
   SessionManager,
   type Session,
@@ -258,6 +264,59 @@ test("hands ended spans to spanProcessors with the attributes this package adds"
     ],
   ]);
   expect(await rumBodies("/otel/v1/traces")).toContain("action example");
+});
+
+test("parents spans started with no active span on the context manager's context", async () => {
+  const ended: ReadableSpan[] = [];
+  const module = await load();
+  const tracer = () => trace.getTracer("test");
+  let fallback = ROOT_CONTEXT;
+  let current = ROOT_CONTEXT;
+  module.init({
+    endpoint: "/otel",
+    serviceName: "web-app",
+    replay: false,
+    contextManager: {
+      active: () => (current === ROOT_CONTEXT ? fallback : current),
+      with: (ctx, fn, thisArg, ...args) => {
+        const previous = current;
+        current = ctx;
+        try {
+          return fn.call(thisArg, ...args);
+        } finally {
+          current = previous;
+        }
+      },
+      bind: (_ctx, target) => target,
+      enable() {
+        return this;
+      },
+      disable() {
+        return this;
+      },
+    },
+    spanProcessors: [
+      {
+        onStart: () => undefined,
+        onEnd: (span) => ended.push(span),
+        forceFlush: () => Promise.resolve(),
+        shutdown: () => Promise.resolve(),
+      },
+    ],
+  });
+
+  await started(module);
+  const interaction = tracer().startSpan("interaction click");
+  fallback = trace.setSpan(ROOT_CONTEXT, interaction);
+  tracer().startSpan("action example").end();
+  interaction.end();
+  await module.shutdown();
+
+  const action = ended.find((span) => span.name === "action example");
+  expect(action?.parentSpanContext?.spanId).toBe(
+    interaction.spanContext().spanId,
+  );
+  expect(action?.spanContext().traceId).toBe(interaction.spanContext().traceId);
 });
 
 test("takes session ids from sessionIdGenerator and keeps sessions in sessionStore", async () => {

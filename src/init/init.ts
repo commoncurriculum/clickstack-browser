@@ -3,6 +3,7 @@ import {
   DiagConsoleLogger,
   DiagLogLevel,
   type Attributes,
+  type ContextManager,
 } from "@opentelemetry/api";
 import {
   ConsoleInstrumentation,
@@ -174,6 +175,12 @@ export interface ClickStackBrowserCommonOptions {
    */
   spanProcessors?: SpanProcessor[] | undefined;
   /**
+   * Carries the active context across function boundaries, such as one that falls back to a span
+   * of the app's own when no span is active. Default: the upstream SDK's, which keeps the active
+   * context only for synchronous code.
+   */
+  contextManager?: ContextManager | undefined;
+  /**
    * Makes each new `session.id`, for example to use the app's own session id. Default: a random
    * id.
    */
@@ -211,6 +218,7 @@ const OPTION_NAMES = new Set(
     sanitizeUrl: true,
     ignoreUrls: true,
     spanProcessors: true,
+    contextManager: true,
     sessionIdGenerator: true,
     sessionStore: true,
   } satisfies Record<keyof ClickStackBrowserOptions, true>),
@@ -439,6 +447,9 @@ async function start(
       ],
     },
     traces: {
+      ...(options.contextManager
+        ? { contextManager: options.contextManager }
+        : {}),
       processors: [
         createSessionSpanProcessor(sessionManager),
         createDocumentSpanProcessor(documentProvider),
