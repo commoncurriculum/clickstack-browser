@@ -1,5 +1,5 @@
 import { n as ReplayRecording, t as RecordFunction } from "./recorder.js";
-import { Attributes, ContextManager } from "@opentelemetry/api";
+import { Attributes, Context } from "@opentelemetry/api";
 import { SessionIdGenerator, SessionStore } from "@opentelemetry/browser-sdk/session";
 import "@opentelemetry/sdk-logs";
 import { SpanProcessor } from "@opentelemetry/sdk-trace";
@@ -92,11 +92,12 @@ interface ClickStackBrowserCommonOptions {
    */
   spanProcessors?: SpanProcessor[] | undefined;
   /**
-   * Carries the active context across function boundaries, such as one that falls back to a span
-   * of the app's own when no span is active. Default: the upstream SDK's, which keeps the active
-   * context only for synchronous code.
+   * Starts an interaction span on each click and submit, and on {@link startInteraction}. Spans
+   * started with no active span, such as after an `await`, join the open interaction's trace. It
+   * ends 1 s after its last span ends, or after 30 s, like Sentry's idle spans. Default: `false`,
+   * the active context is kept only for synchronous code.
    */
-  contextManager?: ContextManager | undefined;
+  interactions?: boolean | undefined;
   /**
    * Makes each new `session.id`, for example to use the app's own session id. Default: a random
    * id.
@@ -217,6 +218,27 @@ export declare function setAttributes(attributes: Attributes | null): void;
  * @public
  */
 export declare function recordException(error: unknown, attributes?: Attributes): void;
+/**
+ * Starts an interaction: a span that spans started with no active span join, until it has been
+ * idle for 1 s after its last span ended, or for 30 s at most, like Sentry's idle spans. Clicks and
+ * submits start one on their own.
+ *
+ * @example
+ * ```ts
+ * router.on('routeWillChange', (transition) => {
+ *   startInteraction(`navigate ${transition.to.name}`, { replace: false });
+ * });
+ * ```
+ *
+ * @param name - The span's name.
+ * @param options - `replace: false` keeps an open interaction instead of ending it, so a route
+ * change or socket message doesn't cut short the click that caused it.
+ * @returns The interaction's context, or the active context when `interactions` is off.
+ * @public
+ */
+export declare function startInteraction(name: string, options: {
+  replace: boolean;
+}): Context;
 /**
  * The signed-in user, recorded with the standard `user.*` attributes.
  *
