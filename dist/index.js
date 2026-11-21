@@ -1,7 +1,6 @@
 import { a as ATTR_USER_NAME, c as guardSanitizeUrl, d as post, f as pageState, h as signalUrl, i as ATTR_USER_ID, l as VERSION, m as resolveUrl, n as ATTR_USER_EMAIL, o as ATTR_USER_ROLES, p as hasSignalPath, r as ATTR_USER_FULL_NAME, s as createUrlSanitizerLogRecordProcessor, u as compress } from "./semconv.js";
 import { DiagConsoleLogger, DiagLogLevel, ROOT_CONTEXT, context, diag, trace } from "@opentelemetry/api";
 import { ConsoleInstrumentation } from "@opentelemetry/browser-instrumentation/experimental/console";
-import { ErrorsInstrumentation } from "@opentelemetry/browser-instrumentation/experimental/errors";
 import { FetchInstrumentation } from "@opentelemetry/browser-instrumentation/experimental/fetch";
 import { NavigationInstrumentation } from "@opentelemetry/browser-instrumentation/experimental/navigation";
 import { NavigationTimingInstrumentation } from "@opentelemetry/browser-instrumentation/experimental/navigation-timing";
@@ -20,6 +19,7 @@ import { BatchSpanProcessor } from "@opentelemetry/sdk-trace";
 import { ATTR_DEPLOYMENT_ENVIRONMENT_NAME, ATTR_EXCEPTION_MESSAGE, ATTR_EXCEPTION_STACKTRACE, ATTR_EXCEPTION_TYPE, ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION, ATTR_TELEMETRY_DISTRO_NAME, ATTR_TELEMETRY_DISTRO_VERSION, ATTR_URL_FULL } from "@opentelemetry/semantic-conventions";
 import { ExportResultCode } from "@opentelemetry/core";
 import { SeverityNumber, logs } from "@opentelemetry/api-logs";
+import { ErrorsInstrumentation } from "@opentelemetry/browser-instrumentation/experimental/errors";
 // src/internal/otlp-exporter.ts
 const KEEPALIVE_PART_BYTES = 16384;
 /**
@@ -307,6 +307,32 @@ function listenForResourceErrors(sanitizeUrl) {
 		window.removeEventListener("error", onError, true);
 	};
 }
+/**
+* Upstream's errors instrumentation with {@link exceptionAttributes}, which also records failed
+* resource loads ({@link listenForResourceErrors}) while it is enabled.
+*
+* @internal
+*/
+var ErrorsAndResourceLoadsInstrumentation = class extends ErrorsInstrumentation {
+	#sanitizeUrl;
+	#stopResourceErrors;
+	constructor(sanitizeUrl) {
+		super({
+			enabled: false,
+			applyCustomAttributes: exceptionAttributes
+		});
+		this.#sanitizeUrl = sanitizeUrl;
+	}
+	enable() {
+		super.enable();
+		this.#stopResourceErrors ??= listenForResourceErrors(this.#sanitizeUrl);
+	}
+	disable() {
+		super.disable();
+		this.#stopResourceErrors?.();
+		this.#stopResourceErrors = void 0;
+	}
+};
 function resourceUrl(element) {
 	if (element instanceof HTMLImageElement || element instanceof HTMLMediaElement) return element.currentSrc || element.src;
 	if (element instanceof HTMLScriptElement || element instanceof HTMLSourceElement || element instanceof HTMLTrackElement) return element.src;
@@ -642,7 +668,7 @@ async function start(options, tracesUrl, logsUrl, warnings) {
 	});
 	run.sessionManager = sessionManager;
 	await sessionManager.start();
-	const resourceTiming = options.resourceTiming === false ? void 0 : await import("@opentelemetry/browser-instrumentation/experimental/resource-timing");
+	const { ResourceTimingInstrumentation } = await import("@opentelemetry/browser-instrumentation/experimental/resource-timing");
 	if (run.stopping !== void 0) return;
 	run.sessionId = sessionManager.getSessionId();
 	sessionManager.addObserver({
@@ -670,40 +696,37 @@ async function start(options, tracesUrl, logsUrl, warnings) {
 	const propagateTraceHeaderCorsUrls = (options.traceOrigins ?? []).map(toUrlPattern);
 	const consoleLevel = options.console ?? "error";
 	const instrumentations = [
-		...options.fetch === false ? [] : [new FetchInstrumentation({
+		options.fetch !== false && new FetchInstrumentation({
 			enabled: false,
 			ignoreUrls,
 			propagateTraceHeaderCorsUrls,
 			...sanitize
-		})],
-		...options.xhr === false ? [] : [new XhrInstrumentation({
+		}),
+		options.xhr !== false && new XhrInstrumentation({
 			enabled: false,
 			ignoreUrls,
 			propagateTraceHeaderCorsUrls,
 			...sanitize
-		})],
-		...resourceTiming ? [new resourceTiming.ResourceTimingInstrumentation({
+		}),
+		options.resourceTiming !== false && new ResourceTimingInstrumentation({
 			enabled: false,
 			ignoreUrls
-		})] : [],
-		...options.errors === false ? [] : [new ErrorsInstrumentation({
-			enabled: false,
-			applyCustomAttributes: exceptionAttributes
-		})],
-		...options.navigation === false ? [] : [new NavigationInstrumentation({
+		}),
+		options.errors !== false && new ErrorsAndResourceLoadsInstrumentation(sanitizeUrl),
+		options.navigation !== false && new NavigationInstrumentation({
 			enabled: false,
 			...sanitize
-		})],
-		...options.navigationTiming === false ? [] : [new NavigationTimingInstrumentation({ enabled: false })],
-		...options.userAction === false ? [] : [new UserActionInstrumentation({ enabled: false })],
-		...options.webVitals === false ? [] : [new WebVitalsInstrumentation({ enabled: false })],
-		...options.longTask === false ? [] : [new LongTaskInstrumentation({ enabled: false })],
-		...consoleLevel ? [new ConsoleInstrumentation({
+		}),
+		options.navigationTiming !== false && new NavigationTimingInstrumentation({ enabled: false }),
+		options.userAction !== false && new UserActionInstrumentation({ enabled: false }),
+		options.webVitals !== false && new WebVitalsInstrumentation({ enabled: false }),
+		options.longTask !== false && new LongTaskInstrumentation({ enabled: false }),
+		consoleLevel && new ConsoleInstrumentation({
 			enabled: false,
 			logMethods: CONSOLE_METHODS[consoleLevel],
 			messageSerializer: serializeConsoleArgs
-		})] : []
-	];
+		})
+	].filter((instrumentation) => instrumentation !== false);
 	const documentProvider = createLocationDocumentProvider(sanitize);
 	run.sdk = startBrowserSdk({
 		logLevel: "WARN",
@@ -737,7 +760,6 @@ async function start(options, tracesUrl, logsUrl, warnings) {
 		},
 		instrumentations
 	});
-	if (options.errors !== false) run.stopResourceErrors = listenForResourceErrors(sanitizeUrl);
 	if (options.interactions) run.stopInteractions = listenForInteractions();
 	for (const warning of warnings) diag.warn(`@clickhouse/clickstack-browser: ${warning}`);
 	if (options.replay !== false) await startRecorder(options, sessionManager, logsUrl, resourceAttributes, sanitizeUrl);
@@ -840,7 +862,6 @@ async function stop() {
 	try {
 		await run.started;
 		await run.recorder?.shutdown();
-		run.stopResourceErrors?.();
 		run.stopInteractions?.();
 		await run.sdk?.shutdown();
 	} catch (error) {

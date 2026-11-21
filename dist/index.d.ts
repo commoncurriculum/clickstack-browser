@@ -3,6 +3,7 @@ import { Attributes, Context } from "@opentelemetry/api";
 import { SessionIdGenerator, SessionStore } from "@opentelemetry/browser-sdk/session";
 import "@opentelemetry/sdk-logs";
 import { SpanProcessor } from "@opentelemetry/sdk-trace";
+import { ErrorsInstrumentation } from "@opentelemetry/browser-instrumentation/experimental/errors";
 /**
  * How much of the console is captured as `browser.console` log events. Each level includes the
  * more severe ones (`'info'` also captures `console.log`).
