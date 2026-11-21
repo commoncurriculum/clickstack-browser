@@ -157,10 +157,29 @@ export interface ClickStackBrowserCommonOptions {
   traceOrigins?: (string | RegExp)[] | undefined;
   /** Records a session replay. Default: `true`. */
   replay?: boolean | undefined;
+  /** Records spans for `fetch` requests. Default: `true`. */
+  fetch?: boolean | undefined;
+  /** Records spans for `XMLHttpRequest` requests. Default: `true`. */
+  xhr?: boolean | undefined;
+  /**
+   * Records `exception` events for uncaught errors, unhandled rejections and failed resource loads.
+   * Default: `true`.
+   */
+  errors?: boolean | undefined;
+  /** Records `browser.navigation` events. Default: `true`. */
+  navigation?: boolean | undefined;
+  /** Records a `browser.navigation_timing` event for the page load. Default: `true`. */
+  navigationTiming?: boolean | undefined;
   /**
    * Records a `browser.resource_timing` log event for each resource the page loads. Default: `true`.
    */
   resourceTiming?: boolean | undefined;
+  /** Records `browser.user_action.click` events. Default: `true`. */
+  userAction?: boolean | undefined;
+  /** Records `browser.web_vital` events. Default: `true`. */
+  webVitals?: boolean | undefined;
+  /** Records spans for long tasks. Default: `true`. */
+  longTask?: boolean | undefined;
   /** Console level captured as log events, or `false` for none. Default: `'error'`. */
   console?: ConsoleLevel | false | undefined;
   /**
@@ -223,7 +242,15 @@ const OPTION_NAMES = new Set(
     record: true,
     maskAllText: true,
     maskAllInputs: true,
+    fetch: true,
+    xhr: true,
+    errors: true,
+    navigation: true,
+    navigationTiming: true,
     resourceTiming: true,
+    userAction: true,
+    webVitals: true,
+    longTask: true,
     console: true,
     sanitizeUrl: true,
     ignoreUrls: true,
@@ -256,7 +283,8 @@ const run: Run = { sessionId: null, replayPaused: false };
  * Starts in the background. It restores or creates the session,
  * starts the SDK with the session, document and user processors,
  * enables the fetch, XHR, errors, navigation, user action, web vitals, navigation
- * timing, resource timing (unless `resourceTiming` is `false`), long task and console instrumentations, and records the replay.
+ * timing, resource timing, long task and console instrumentations that its options leave on, and
+ * records the replay.
  * Telemetry from before the SDK has started is not captured. Without a document (such as for server-side
  * rendering, workers) it does nothing. Only the first call on a page counts, subsequent calls log a
  * warning.
@@ -401,18 +429,26 @@ async function start(
   // Constructed disabled: an enabled instrumentation starts in its constructor before the SDK's
   // providers exist and loses its first events (such as the initial navigation)
   const instrumentations = [
-    new FetchInstrumentation({
-      enabled: false,
-      ignoreUrls,
-      propagateTraceHeaderCorsUrls,
-      ...sanitize,
-    }),
-    new XhrInstrumentation({
-      enabled: false,
-      ignoreUrls,
-      propagateTraceHeaderCorsUrls,
-      ...sanitize,
-    }),
+    ...(options.fetch === false
+      ? []
+      : [
+          new FetchInstrumentation({
+            enabled: false,
+            ignoreUrls,
+            propagateTraceHeaderCorsUrls,
+            ...sanitize,
+          }),
+        ]),
+    ...(options.xhr === false
+      ? []
+      : [
+          new XhrInstrumentation({
+            enabled: false,
+            ignoreUrls,
+            propagateTraceHeaderCorsUrls,
+            ...sanitize,
+          }),
+        ]),
     ...(resourceTiming
       ? [
           new resourceTiming.ResourceTimingInstrumentation({
@@ -421,15 +457,29 @@ async function start(
           }),
         ]
       : []),
-    new ErrorsInstrumentation({
-      enabled: false,
-      applyCustomAttributes: exceptionAttributes,
-    }),
-    new NavigationInstrumentation({ enabled: false, ...sanitize }),
-    new NavigationTimingInstrumentation({ enabled: false }),
-    new UserActionInstrumentation({ enabled: false }),
-    new WebVitalsInstrumentation({ enabled: false }),
-    new LongTaskInstrumentation({ enabled: false }),
+    ...(options.errors === false
+      ? []
+      : [
+          new ErrorsInstrumentation({
+            enabled: false,
+            applyCustomAttributes: exceptionAttributes,
+          }),
+        ]),
+    ...(options.navigation === false
+      ? []
+      : [new NavigationInstrumentation({ enabled: false, ...sanitize })]),
+    ...(options.navigationTiming === false
+      ? []
+      : [new NavigationTimingInstrumentation({ enabled: false })]),
+    ...(options.userAction === false
+      ? []
+      : [new UserActionInstrumentation({ enabled: false })]),
+    ...(options.webVitals === false
+      ? []
+      : [new WebVitalsInstrumentation({ enabled: false })]),
+    ...(options.longTask === false
+      ? []
+      : [new LongTaskInstrumentation({ enabled: false })]),
     ...(consoleLevel
       ? [
           new ConsoleInstrumentation({
@@ -489,7 +539,9 @@ async function start(
     },
     instrumentations,
   });
-  run.stopResourceErrors = listenForResourceErrors(sanitizeUrl);
+  if (options.errors !== false) {
+    run.stopResourceErrors = listenForResourceErrors(sanitizeUrl);
+  }
   if (options.interactions) {
     run.stopInteractions = listenForInteractions();
   }
