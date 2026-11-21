@@ -89,6 +89,7 @@ by default. Set `maskAllText: false` to see the text ([Privacy](#privacy)).
 | `maskAllText`        | `true`    | Masks all text in the replay. With `false`, elements with the `rr-mask` class stay masked ([Privacy](#privacy)).                                                                                                                      |
 | `maskAllInputs`      | `true`    | Masks the values of all inputs, text areas and selects. With `false`, only passwords are masked.                                                                                                                                      |
 | `record`             | None      | An rrweb the app runs itself, or a promise of one, for example to share one recording with another tool. It owns masking, so `maskAllText` and `maskAllInputs` can't be given beside it. Its input events must carry `userTriggered`. |
+| `resourceTiming`     | `true`    | `false` records no `browser.resource_timing` events. Fetch and XHR spans still time the app's own requests.                                                                                                                           |
 | `console`            | `'error'` | Console level recorded as log events: `'error'`, `'warn'`, `'info'` (with `console.log`), `'debug'`, or `false`.                                                                                                                      |
 | `sanitizeUrl`        | None      | Rewrites URLs before they are recorded, for example to drop tokens from query strings ([Privacy](#privacy)).                                                                                                                          |
 
@@ -97,7 +98,7 @@ and starts nothing, and a later valid call still starts. Unknown options are ign
 The rest is fixed:
 
 - Instrumentations: fetch, XHR, errors, failed resource loads, navigation, user action, web vitals,
-  navigation timing, resource timing, long task and console.
+  navigation timing, resource timing (unless `resourceTiming` is `false`), long task and console.
 - Sessions last at most 4 hours and end after 15 minutes without telemetry. They are stored in
   `localStorage` and shared by the tabs of the origin. `sessionIdGenerator` and `sessionStore`
   replace upstream's defaults, for example to use the app's own session id (`{ generateSessionId }`)

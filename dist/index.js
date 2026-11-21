@@ -565,6 +565,7 @@ const OPTION_NAMES = new Set(Object.keys({
 	record: true,
 	maskAllText: true,
 	maskAllInputs: true,
+	resourceTiming: true,
 	console: true,
 	sanitizeUrl: true,
 	ignoreUrls: true,
@@ -584,7 +585,7 @@ const run = {
 * Starts in the background. It restores or creates the session,
 * starts the SDK with the session, document and user processors,
 * enables the fetch, XHR, errors, navigation, user action, web vitals, navigation
-* timing, resource timing, long task and console instrumentations, and records the replay.
+* timing, resource timing (unless `resourceTiming` is `false`), long task and console instrumentations, and records the replay.
 * Telemetry from before the SDK has started is not captured. Without a document (such as for server-side
 * rendering, workers) it does nothing. Only the first call on a page counts, subsequent calls log a
 * warning.
@@ -632,7 +633,7 @@ async function start(options, tracesUrl, logsUrl, warnings) {
 	});
 	run.sessionManager = sessionManager;
 	await sessionManager.start();
-	const { ResourceTimingInstrumentation } = await import("@opentelemetry/browser-instrumentation/experimental/resource-timing");
+	const resourceTiming = options.resourceTiming === false ? void 0 : await import("@opentelemetry/browser-instrumentation/experimental/resource-timing");
 	if (run.stopping !== void 0) return;
 	run.sessionId = sessionManager.getSessionId();
 	sessionManager.addObserver({
@@ -672,10 +673,10 @@ async function start(options, tracesUrl, logsUrl, warnings) {
 			propagateTraceHeaderCorsUrls,
 			...sanitize
 		}),
-		new ResourceTimingInstrumentation({
+		...resourceTiming ? [new resourceTiming.ResourceTimingInstrumentation({
 			enabled: false,
 			ignoreUrls
-		}),
+		})] : [],
 		new ErrorsInstrumentation({
 			enabled: false,
 			applyCustomAttributes: exceptionAttributes

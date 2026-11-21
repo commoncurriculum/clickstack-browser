@@ -70,6 +70,10 @@ interface ClickStackBrowserCommonOptions {
   traceOrigins?: (string | RegExp)[] | undefined;
   /** Records a session replay. Default: `true`. */
   replay?: boolean | undefined;
+  /**
+   * Records a `browser.resource_timing` log event for each resource the page loads. Default: `true`.
+   */
+  resourceTiming?: boolean | undefined;
   /** Console level captured as log events, or `false` for none. Default: `'error'`. */
   console?: ConsoleLevel | false | undefined;
   /**
@@ -116,7 +120,7 @@ interface ClickStackBrowserCommonOptions {
  * Starts in the background. It restores or creates the session,
  * starts the SDK with the session, document and user processors,
  * enables the fetch, XHR, errors, navigation, user action, web vitals, navigation
- * timing, resource timing, long task and console instrumentations, and records the replay.
+ * timing, resource timing (unless `resourceTiming` is `false`), long task and console instrumentations, and records the replay.
  * Telemetry from before the SDK has started is not captured. Without a document (such as for server-side
  * rendering, workers) it does nothing. Only the first call on a page counts, subsequent calls log a
  * warning.
