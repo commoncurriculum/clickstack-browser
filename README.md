@@ -89,7 +89,15 @@ by default. Set `maskAllText: false` to see the text ([Privacy](#privacy)).
 | `maskAllText`        | `true`    | Masks all text in the replay. With `false`, elements with the `rr-mask` class stay masked ([Privacy](#privacy)).                                                                                                                      |
 | `maskAllInputs`      | `true`    | Masks the values of all inputs, text areas and selects. With `false`, only passwords are masked.                                                                                                                                      |
 | `record`             | None      | An rrweb the app runs itself, or a promise of one, for example to share one recording with another tool. It owns masking, so `maskAllText` and `maskAllInputs` can't be given beside it. Its input events must carry `userTriggered`. |
-| `resourceTiming`     | `true`    | `false` records no `browser.resource_timing` events. Fetch and XHR spans still time the app's own requests.                                                                                                                           |
+| `fetch`              | `true`    | Spans for `fetch` requests.                                                                                                                                                                                                           |
+| `xhr`                | `true`    | Spans for `XMLHttpRequest` requests.                                                                                                                                                                                                  |
+| `errors`             | `true`    | `exception` events for uncaught errors, unhandled rejections and failed resource loads.                                                                                                                                               |
+| `navigation`         | `true`    | `browser.navigation` events.                                                                                                                                                                                                          |
+| `navigationTiming`   | `true`    | A `browser.navigation_timing` event for the page load.                                                                                                                                                                                |
+| `resourceTiming`     | `true`    | A `browser.resource_timing` event for each resource the page loads.                                                                                                                                                                   |
+| `userAction`         | `true`    | `browser.user_action.click` events.                                                                                                                                                                                                   |
+| `webVitals`          | `true`    | `browser.web_vital` events.                                                                                                                                                                                                           |
+| `longTask`           | `true`    | Spans for long tasks.                                                                                                                                                                                                                 |
 | `console`            | `'error'` | Console level recorded as log events: `'error'`, `'warn'`, `'info'` (with `console.log`), `'debug'`, or `false`.                                                                                                                      |
 | `sanitizeUrl`        | None      | Rewrites URLs before they are recorded, for example to drop tokens from query strings ([Privacy](#privacy)).                                                                                                                          |
 
@@ -97,8 +105,6 @@ Without a `serviceName` and an http(s) `endpoint` (or both signal endpoints), `i
 and starts nothing, and a later valid call still starts. Unknown options are ignored with a warning.
 The rest is fixed:
 
-- Instrumentations: fetch, XHR, errors, failed resource loads, navigation, user action, web vitals,
-  navigation timing, resource timing (unless `resourceTiming` is `false`), long task and console.
 - Sessions last at most 4 hours and end after 15 minutes without telemetry. They are stored in
   `localStorage` and shared by the tabs of the origin. `sessionIdGenerator` and `sessionStore`
   replace upstream's defaults, for example to use the app's own session id (`{ generateSessionId }`)

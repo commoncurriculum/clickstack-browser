@@ -70,10 +70,29 @@ interface ClickStackBrowserCommonOptions {
   traceOrigins?: (string | RegExp)[] | undefined;
   /** Records a session replay. Default: `true`. */
   replay?: boolean | undefined;
+  /** Records spans for `fetch` requests. Default: `true`. */
+  fetch?: boolean | undefined;
+  /** Records spans for `XMLHttpRequest` requests. Default: `true`. */
+  xhr?: boolean | undefined;
+  /**
+   * Records `exception` events for uncaught errors, unhandled rejections and failed resource loads.
+   * Default: `true`.
+   */
+  errors?: boolean | undefined;
+  /** Records `browser.navigation` events. Default: `true`. */
+  navigation?: boolean | undefined;
+  /** Records a `browser.navigation_timing` event for the page load. Default: `true`. */
+  navigationTiming?: boolean | undefined;
   /**
    * Records a `browser.resource_timing` log event for each resource the page loads. Default: `true`.
    */
   resourceTiming?: boolean | undefined;
+  /** Records `browser.user_action.click` events. Default: `true`. */
+  userAction?: boolean | undefined;
+  /** Records `browser.web_vital` events. Default: `true`. */
+  webVitals?: boolean | undefined;
+  /** Records spans for long tasks. Default: `true`. */
+  longTask?: boolean | undefined;
   /** Console level captured as log events, or `false` for none. Default: `'error'`. */
   console?: ConsoleLevel | false | undefined;
   /**
@@ -120,7 +139,8 @@ interface ClickStackBrowserCommonOptions {
  * Starts in the background. It restores or creates the session,
  * starts the SDK with the session, document and user processors,
  * enables the fetch, XHR, errors, navigation, user action, web vitals, navigation
- * timing, resource timing (unless `resourceTiming` is `false`), long task and console instrumentations, and records the replay.
+ * timing, resource timing, long task and console instrumentations that its options leave on, and
+ * records the replay.
  * Telemetry from before the SDK has started is not captured. Without a document (such as for server-side
  * rendering, workers) it does nothing. Only the first call on a page counts, subsequent calls log a
  * warning.

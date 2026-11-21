@@ -565,7 +565,15 @@ const OPTION_NAMES = new Set(Object.keys({
 	record: true,
 	maskAllText: true,
 	maskAllInputs: true,
+	fetch: true,
+	xhr: true,
+	errors: true,
+	navigation: true,
+	navigationTiming: true,
 	resourceTiming: true,
+	userAction: true,
+	webVitals: true,
+	longTask: true,
 	console: true,
 	sanitizeUrl: true,
 	ignoreUrls: true,
@@ -585,7 +593,8 @@ const run = {
 * Starts in the background. It restores or creates the session,
 * starts the SDK with the session, document and user processors,
 * enables the fetch, XHR, errors, navigation, user action, web vitals, navigation
-* timing, resource timing (unless `resourceTiming` is `false`), long task and console instrumentations, and records the replay.
+* timing, resource timing, long task and console instrumentations that its options leave on, and
+* records the replay.
 * Telemetry from before the SDK has started is not captured. Without a document (such as for server-side
 * rendering, workers) it does nothing. Only the first call on a page counts, subsequent calls log a
 * warning.
@@ -661,34 +670,34 @@ async function start(options, tracesUrl, logsUrl, warnings) {
 	const propagateTraceHeaderCorsUrls = (options.traceOrigins ?? []).map(toUrlPattern);
 	const consoleLevel = options.console ?? "error";
 	const instrumentations = [
-		new FetchInstrumentation({
+		...options.fetch === false ? [] : [new FetchInstrumentation({
 			enabled: false,
 			ignoreUrls,
 			propagateTraceHeaderCorsUrls,
 			...sanitize
-		}),
-		new XhrInstrumentation({
+		})],
+		...options.xhr === false ? [] : [new XhrInstrumentation({
 			enabled: false,
 			ignoreUrls,
 			propagateTraceHeaderCorsUrls,
 			...sanitize
-		}),
+		})],
 		...resourceTiming ? [new resourceTiming.ResourceTimingInstrumentation({
 			enabled: false,
 			ignoreUrls
 		})] : [],
-		new ErrorsInstrumentation({
+		...options.errors === false ? [] : [new ErrorsInstrumentation({
 			enabled: false,
 			applyCustomAttributes: exceptionAttributes
-		}),
-		new NavigationInstrumentation({
+		})],
+		...options.navigation === false ? [] : [new NavigationInstrumentation({
 			enabled: false,
 			...sanitize
-		}),
-		new NavigationTimingInstrumentation({ enabled: false }),
-		new UserActionInstrumentation({ enabled: false }),
-		new WebVitalsInstrumentation({ enabled: false }),
-		new LongTaskInstrumentation({ enabled: false }),
+		})],
+		...options.navigationTiming === false ? [] : [new NavigationTimingInstrumentation({ enabled: false })],
+		...options.userAction === false ? [] : [new UserActionInstrumentation({ enabled: false })],
+		...options.webVitals === false ? [] : [new WebVitalsInstrumentation({ enabled: false })],
+		...options.longTask === false ? [] : [new LongTaskInstrumentation({ enabled: false })],
 		...consoleLevel ? [new ConsoleInstrumentation({
 			enabled: false,
 			logMethods: CONSOLE_METHODS[consoleLevel],
@@ -728,7 +737,7 @@ async function start(options, tracesUrl, logsUrl, warnings) {
 		},
 		instrumentations
 	});
-	run.stopResourceErrors = listenForResourceErrors(sanitizeUrl);
+	if (options.errors !== false) run.stopResourceErrors = listenForResourceErrors(sanitizeUrl);
 	if (options.interactions) run.stopInteractions = listenForInteractions();
 	for (const warning of warnings) diag.warn(`@clickhouse/clickstack-browser: ${warning}`);
 	if (options.replay !== false) await startRecorder(options, sessionManager, logsUrl, resourceAttributes, sanitizeUrl);
