@@ -16,6 +16,8 @@
 - `interactions` option and `startInteraction`: an interaction span on each click and submit, or
   started by the app, that spans started with no active span join, such as after an `await`. It
   ends 1 s after its last span ends, or after 30 s, like Sentry's idle spans.
+- `resourceTiming` option: `false` records no `browser.resource_timing` events, for example to
+  keep each script, image and third-party pixel the page loads out of the logs.
 
 ### Changed
 

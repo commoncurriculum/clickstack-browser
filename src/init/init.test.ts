@@ -707,6 +707,26 @@ test("captures no console calls with console false, and matches origins given as
   expect(new Headers(request?.init?.headers).get("traceparent")).not.toBeNull();
 });
 
+test("records no resource timing events with resourceTiming false, and still records fetch spans", async () => {
+  const module = await load();
+  module.init({
+    endpoint: "/otel",
+    serviceName: "web-app",
+    replay: false,
+    resourceTiming: false,
+  });
+  await started(module);
+
+  await (await fetch("/api/items")).text();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  await module.shutdown();
+
+  expect(await rumBodies("/otel/v1/logs")).not.toContain(
+    '"eventName":"browser.resource_timing"',
+  );
+  expect(await rumBodies("/otel/v1/traces")).toContain("/api/items");
+});
+
 test("shutdown during start leaves nothing running", async () => {
   const module = await load();
   module.init({ endpoint: "/otel", serviceName: "web-app" });
