@@ -3,7 +3,6 @@ import {
   DiagConsoleLogger,
   DiagLogLevel,
   type Attributes,
-  type ContextManager,
 } from "@opentelemetry/api";
 import {
   ConsoleInstrumentation,
@@ -73,6 +72,11 @@ import {
   attributesLogRecordProcessor,
   attributesSpanProcessor,
 } from "../rum/attributes.ts";
+import {
+  interactionContextManager,
+  interactionSpanProcessor,
+  listenForInteractions,
+} from "../rum/interactions.ts";
 import { userLogRecordProcessor, userSpanProcessor } from "../rum/user.ts";
 import { VERSION } from "../version.ts";
 
@@ -175,11 +179,12 @@ export interface ClickStackBrowserCommonOptions {
    */
   spanProcessors?: SpanProcessor[] | undefined;
   /**
-   * Carries the active context across function boundaries, such as one that falls back to a span
-   * of the app's own when no span is active. Default: the upstream SDK's, which keeps the active
-   * context only for synchronous code.
+   * Starts an interaction span on each click and submit, and on {@link startInteraction}. Spans
+   * started with no active span, such as after an `await`, join the open interaction's trace. It
+   * ends 1 s after its last span ends, or after 30 s, like Sentry's idle spans. Default: `false`,
+   * the active context is kept only for synchronous code.
    */
-  contextManager?: ContextManager | undefined;
+  interactions?: boolean | undefined;
   /**
    * Makes each new `session.id`, for example to use the app's own session id. Default: a random
    * id.
@@ -218,7 +223,7 @@ const OPTION_NAMES = new Set(
     sanitizeUrl: true,
     ignoreUrls: true,
     spanProcessors: true,
-    contextManager: true,
+    interactions: true,
     sessionIdGenerator: true,
     sessionStore: true,
   } satisfies Record<keyof ClickStackBrowserOptions, true>),
@@ -232,6 +237,7 @@ interface Run {
   sessionManager?: SessionManager;
   sdk?: WebSdk;
   stopResourceErrors?: () => void;
+  stopInteractions?: () => void;
   recorder?: Recorder;
 }
 
@@ -447,10 +453,11 @@ async function start(
       ],
     },
     traces: {
-      ...(options.contextManager
-        ? { contextManager: options.contextManager }
+      ...(options.interactions
+        ? { contextManager: interactionContextManager }
         : {}),
       processors: [
+        ...(options.interactions ? [interactionSpanProcessor] : []),
         createSessionSpanProcessor(sessionManager),
         createDocumentSpanProcessor(documentProvider),
         userSpanProcessor,
@@ -469,6 +476,9 @@ async function start(
     instrumentations,
   });
   run.stopResourceErrors = listenForResourceErrors(sanitizeUrl);
+  if (options.interactions) {
+    run.stopInteractions = listenForInteractions();
+  }
   for (const warning of warnings) {
     diag.warn(`@clickhouse/clickstack-browser: ${warning}`);
   }
@@ -631,6 +641,7 @@ async function stop(): Promise<void> {
     await run.started;
     await run.recorder?.shutdown();
     run.stopResourceErrors?.();
+    run.stopInteractions?.();
     await run.sdk?.shutdown();
   } catch (error) {
     diag.warn("@clickhouse/clickstack-browser: shutdown failed", error);
