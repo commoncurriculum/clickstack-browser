@@ -450,6 +450,7 @@ const OPTION_NAMES = new Set(Object.keys({
 	sanitizeUrl: true,
 	ignoreUrls: true,
 	spanProcessors: true,
+	contextManager: true,
 	sessionIdGenerator: true,
 	sessionStore: true
 }));
@@ -590,17 +591,20 @@ async function start(options, tracesUrl, logsUrl, warnings) {
 				...BATCH_CONFIG
 			})
 		] },
-		traces: { processors: [
-			createSessionSpanProcessor(sessionManager),
-			createDocumentSpanProcessor(documentProvider),
-			userSpanProcessor,
-			attributesSpanProcessor,
-			...options.spanProcessors ?? [],
-			new BatchSpanProcessor({
-				exporter: new OtlpJsonExporter(tracesUrl, options.apiKey, JsonTraceSerializer),
-				...BATCH_CONFIG
-			})
-		] },
+		traces: {
+			contextManager: options.contextManager,
+			processors: [
+				createSessionSpanProcessor(sessionManager),
+				createDocumentSpanProcessor(documentProvider),
+				userSpanProcessor,
+				attributesSpanProcessor,
+				...options.spanProcessors ?? [],
+				new BatchSpanProcessor({
+					exporter: new OtlpJsonExporter(tracesUrl, options.apiKey, JsonTraceSerializer),
+					...BATCH_CONFIG
+				})
+			]
+		},
 		instrumentations
 	});
 	run.stopResourceErrors = listenForResourceErrors(sanitizeUrl);

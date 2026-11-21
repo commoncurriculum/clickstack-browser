@@ -1,5 +1,5 @@
 import { n as ReplayRecording, t as RecordFunction } from "./recorder.js";
-import { Attributes } from "@opentelemetry/api";
+import { Attributes, ContextManager } from "@opentelemetry/api";
 import { SessionIdGenerator, SessionStore } from "@opentelemetry/browser-sdk/session";
 import "@opentelemetry/sdk-logs";
 import { SpanProcessor } from "@opentelemetry/sdk-trace";
@@ -91,6 +91,12 @@ interface ClickStackBrowserCommonOptions {
    * adds, and before the exporter. Default: none.
    */
   spanProcessors?: SpanProcessor[] | undefined;
+  /**
+   * Carries the active context across function boundaries, such as one that falls back to a span
+   * of the app's own when no span is active. Default: the upstream SDK's, which keeps the active
+   * context only for synchronous code.
+   */
+  contextManager?: ContextManager | undefined;
   /**
    * Makes each new `session.id`, for example to use the app's own session id. Default: a random
    * id.
