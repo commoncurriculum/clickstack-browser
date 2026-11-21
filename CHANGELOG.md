@@ -13,9 +13,9 @@
   place of a random id kept in `localStorage`, for example to use the app's own session id.
 - `spanProcessors` option: further span processors, such as one that copies ended spans to another
   tool. They run after this package's processors and before the exporter.
-- `contextManager` option: upstream's context manager, for example one that falls back to an app
-  span when no span is active. Upstream's default keeps the active context only for synchronous
-  code.
+- `interactions` option and `startInteraction`: an interaction span on each click and submit, or
+  started by the app, that spans started with no active span join, such as after an `await`. It
+  ends 1 s after its last span ends, or after 30 s, like Sentry's idle spans.
 
 ### Changed
 

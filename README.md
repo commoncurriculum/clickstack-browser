@@ -71,26 +71,26 @@ Call `init` once per page load, at the top level of your entry module (`instrume
 in Next.js, `src/main.ts` in Vite), not in a component effect. Replays mask all text and form values
 by default. Set `maskAllText: false` to see the text ([Privacy](#privacy)).
 
-| Option               | Default    | Meaning                                                                                                                                                                                                                               |
-| -------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `endpoint`           | Required   | OTLP/HTTP base URL of the collector, or a same-origin path such as `/otel` that your server forwards. `/v1/traces` and `/v1/logs` are appended. Not needed when both signal endpoints are set.                                        |
-| `tracesEndpoint`     | None       | Full URL for traces, used as is, like `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`. Replaces the traces URL built from `endpoint`.                                                                                                            |
-| `logsEndpoint`       | None       | Full URL for logs and replay, used as is, like `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`. Replaces the logs URL built from `endpoint`.                                                                                                       |
-| `serviceName`        | Required   | `service.name` of all telemetry.                                                                                                                                                                                                      |
-| `serviceVersion`     | None       | `service.version`, such as `2.0.0` or a commit SHA, to compare releases.                                                                                                                                                              |
-| `environment`        | None       | `deployment.environment.name`, such as `production` or `staging`.                                                                                                                                                                     |
-| `resourceAttributes` | None       | Further resource attributes of all telemetry, replay records included, such as `service.namespace`. The options above win over the same keys.                                                                                         |
-| `apiKey`             | None       | Ingestion key, sent as the `authorization` header. Anyone who loads the page can read it; to keep it private, send to a same-origin path whose server adds the header.                                                                |
-| `traceOrigins`       | None       | Backends whose fetch and XHR requests carry trace context ([Trace propagation and CORS](#trace-propagation-and-cors)). A string matches every URL under that origin; a RegExp is matched against the URL.                             |
-| `ignoreUrls`         | None       | Requests that fetch, XHR and resource timing don't record, such as long polling. A string must equal the full URL; a RegExp is matched against it. The collector's own URLs are always ignored.                                       |
-| `spanProcessors`     | None       | Further span processors, such as one that copies ended spans to another tool. They see every attribute this package adds and run before the exporter.                                                                                 |
-| `contextManager`     | Upstream's | Carries the active context across function boundaries, such as one that falls back to an app span when none is active. Upstream's keeps it only for synchronous code.                                                                 |
-| `replay`             | `true`     | `false` turns session replay off, and the recorder (rrweb) is never downloaded.                                                                                                                                                       |
-| `maskAllText`        | `true`     | Masks all text in the replay. With `false`, elements with the `rr-mask` class stay masked ([Privacy](#privacy)).                                                                                                                      |
-| `maskAllInputs`      | `true`     | Masks the values of all inputs, text areas and selects. With `false`, only passwords are masked.                                                                                                                                      |
-| `record`             | None       | An rrweb the app runs itself, or a promise of one, for example to share one recording with another tool. It owns masking, so `maskAllText` and `maskAllInputs` can't be given beside it. Its input events must carry `userTriggered`. |
-| `console`            | `'error'`  | Console level recorded as log events: `'error'`, `'warn'`, `'info'` (with `console.log`), `'debug'`, or `false`.                                                                                                                      |
-| `sanitizeUrl`        | None       | Rewrites URLs before they are recorded, for example to drop tokens from query strings ([Privacy](#privacy)).                                                                                                                          |
+| Option               | Default   | Meaning                                                                                                                                                                                                                               |
+| -------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `endpoint`           | Required  | OTLP/HTTP base URL of the collector, or a same-origin path such as `/otel` that your server forwards. `/v1/traces` and `/v1/logs` are appended. Not needed when both signal endpoints are set.                                        |
+| `tracesEndpoint`     | None      | Full URL for traces, used as is, like `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`. Replaces the traces URL built from `endpoint`.                                                                                                            |
+| `logsEndpoint`       | None      | Full URL for logs and replay, used as is, like `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`. Replaces the logs URL built from `endpoint`.                                                                                                       |
+| `serviceName`        | Required  | `service.name` of all telemetry.                                                                                                                                                                                                      |
+| `serviceVersion`     | None      | `service.version`, such as `2.0.0` or a commit SHA, to compare releases.                                                                                                                                                              |
+| `environment`        | None      | `deployment.environment.name`, such as `production` or `staging`.                                                                                                                                                                     |
+| `resourceAttributes` | None      | Further resource attributes of all telemetry, replay records included, such as `service.namespace`. The options above win over the same keys.                                                                                         |
+| `apiKey`             | None      | Ingestion key, sent as the `authorization` header. Anyone who loads the page can read it; to keep it private, send to a same-origin path whose server adds the header.                                                                |
+| `traceOrigins`       | None      | Backends whose fetch and XHR requests carry trace context ([Trace propagation and CORS](#trace-propagation-and-cors)). A string matches every URL under that origin; a RegExp is matched against the URL.                             |
+| `ignoreUrls`         | None      | Requests that fetch, XHR and resource timing don't record, such as long polling. A string must equal the full URL; a RegExp is matched against it. The collector's own URLs are always ignored.                                       |
+| `spanProcessors`     | None      | Further span processors, such as one that copies ended spans to another tool. They see every attribute this package adds and run before the exporter.                                                                                 |
+| `interactions`       | `false`   | Starts an interaction span on each click and submit, and on `startInteraction`. Spans started with no active span, such as after an `await`, join it. It ends 1 s after its last span ends, or after 30 s, like Sentry's idle spans.  |
+| `replay`             | `true`    | `false` turns session replay off, and the recorder (rrweb) is never downloaded.                                                                                                                                                       |
+| `maskAllText`        | `true`    | Masks all text in the replay. With `false`, elements with the `rr-mask` class stay masked ([Privacy](#privacy)).                                                                                                                      |
+| `maskAllInputs`      | `true`    | Masks the values of all inputs, text areas and selects. With `false`, only passwords are masked.                                                                                                                                      |
+| `record`             | None      | An rrweb the app runs itself, or a promise of one, for example to share one recording with another tool. It owns masking, so `maskAllText` and `maskAllInputs` can't be given beside it. Its input events must carry `userTriggered`. |
+| `console`            | `'error'` | Console level recorded as log events: `'error'`, `'warn'`, `'info'` (with `console.log`), `'debug'`, or `false`.                                                                                                                      |
+| `sanitizeUrl`        | None      | Rewrites URLs before they are recorded, for example to drop tokens from query strings ([Privacy](#privacy)).                                                                                                                          |
 
 Without a `serviceName` and an http(s) `endpoint` (or both signal endpoints), `init` logs an error
 and starts nothing, and a later valid call still starts. Unknown options are ignored with a warning.
@@ -119,6 +119,9 @@ Other functions:
   call it with `setUser(null)`, so the next user on the device gets a session of their own. It does
   nothing before `init` has started.
 - `recordException(error, attributes?)` records an error your code caught ([Errors](#errors)).
+- `startInteraction(name, { replace })` starts an interaction span, for example on a route change,
+  when `interactions` is on, and returns its context. `replace: false` keeps an open interaction,
+  so a route change doesn't cut short the click that caused it.
 - `shutdown()` sends what is buffered and stops everything for the rest of the page.
 
 ## Errors
@@ -152,7 +155,7 @@ try {
   `Access-Control-Allow-Origin`.
 - Calling `recordException` for an error that is also passed to `console.error` records it twice.
 - Inside an active span, `recordException` links the event to it. Browsers lose the active span
-  after an `await`.
+  after an `await`, unless `interactions` is on, which links it to the open interaction.
 
 ## Privacy
 
@@ -318,6 +321,7 @@ module.exports = {
   getSessionId: () => null,
   startNewSession: noop,
   recordException: noop,
+  startInteraction: noop,
   pauseReplay: noop,
   resumeReplay: noop,
   shutdown: () => Promise.resolve(),

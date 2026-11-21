@@ -118,12 +118,12 @@
     {
       "name": "npm: .",
       "path": "dist/index.js",
-      "import": "{ init, setUser, setAttributes, getSessionId, startNewSession, recordException, pauseReplay, resumeReplay, shutdown }",
+      "import": "{ init, setUser, setAttributes, getSessionId, startNewSession, recordException, startInteraction, pauseReplay, resumeReplay, shutdown }",
       "ignore": [
         "@opentelemetry"
       ],
       "gzip": true,
-      "limit": "32 kB"
+      "limit": "33 kB"
     },
     {
       "name": "npm: ./replay",

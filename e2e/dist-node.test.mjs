@@ -134,6 +134,7 @@ test("the IIFE evaluates and runs in a context without a page", async () => {
     "setAttributes",
     "setUser",
     "shutdown",
+    "startInteraction",
     "startNewSession",
   ]);
 
