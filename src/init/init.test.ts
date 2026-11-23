@@ -101,6 +101,23 @@ function recordCount(body: string | undefined): number {
   return spans.length + records.length;
 }
 
+interface LogRecordJson {
+  eventName?: string;
+  traceId?: string;
+  spanId?: string;
+}
+
+function logRecords(bodies: string): LogRecordJson[] {
+  return bodies
+    .split("\n")
+    .filter((body) => body !== "")
+    .flatMap((body) =>
+      ((JSON.parse(body) as OtlpJson).resourceLogs ?? []).flatMap((r) =>
+        r.scopeLogs.flatMap((s) => s.logRecords as LogRecordJson[]),
+      ),
+    );
+}
+
 beforeEach(() => {
   requests = [];
   localStorage.clear();
@@ -361,6 +378,68 @@ test("ends the open interaction on shutdown and starts none after it", async () 
   document.body.click();
 
   expect(ended.filter((span) => span.name === "click")).toHaveLength(1);
+});
+
+test("starts a pageload interaction once started, which spans and errors with no active span join", async () => {
+  const { module, ended } = await initWithInteractions(true);
+
+  const action = trace.getTracer("test").startSpan("action example");
+  action.end();
+  recordException(new Error("load-time error"));
+  await vi.waitFor(
+    () => {
+      expect(ended.map((span) => span.name)).toContain("pageload");
+    },
+    { timeout: 2000 },
+  );
+  await module.shutdown();
+
+  const pageload = ended.find((span) => span.name === "pageload");
+  expect(pageload?.instrumentationScope.name).toBe("custom-action");
+  expect(pageload?.parentSpanContext).toBeUndefined();
+  expect(action.spanContext().traceId).toBe(pageload?.spanContext().traceId);
+  const error = logRecords(await rumBodies("/otel/v1/logs")).find((record) =>
+    JSON.stringify(record).includes("load-time error"),
+  );
+  expect(error?.traceId).toBe(pageload?.spanContext().traceId);
+});
+
+test("keeps a click's own interaction when it comes during the pageload", async () => {
+  const { ended } = await initWithInteractions(true);
+
+  document.body.click();
+  const inClick = trace.getTracer("test").startSpan("in the click");
+  inClick.end();
+  await vi.waitFor(
+    () => {
+      expect(ended.map((span) => span.name)).toContain("click");
+    },
+    { timeout: 2000 },
+  );
+
+  const click = ended.find((span) => span.name === "click");
+  const pageload = ended.find((span) => span.name === "pageload");
+  expect(pageload).toBeDefined();
+  expect(inClick.spanContext().traceId).toBe(click?.spanContext().traceId);
+  expect(click?.spanContext().traceId).not.toBe(
+    pageload?.spanContext().traceId,
+  );
+});
+
+test("sends web vitals with no trace, even while an interaction is open", async () => {
+  const { module } = await initWithInteractions(true);
+
+  await sleep(200);
+  await module.shutdown();
+
+  const vitals = logRecords(await rumBodies("/otel/v1/logs")).filter(
+    (record) => record.eventName === "browser.web_vital",
+  );
+  expect(vitals.length).toBeGreaterThan(0);
+  for (const vital of vitals) {
+    expect(vital.traceId ?? "").toBe("");
+    expect(vital.spanId ?? "").toBe("");
+  }
 });
 
 test("starts no interaction without the interactions option", async () => {
