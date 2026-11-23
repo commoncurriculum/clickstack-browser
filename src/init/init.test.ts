@@ -1,51 +1,28 @@
-import {
-  context,
-  diag,
-  propagation,
-  ROOT_CONTEXT,
-  trace,
-} from "@opentelemetry/api";
+import { diag, trace } from "@opentelemetry/api";
 import {
   SessionManager,
   type Session,
 } from "@opentelemetry/browser-sdk/session";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { logs } from "../logs-api.ts";
+import { expect, test, vi } from "vitest";
 import type { RecordFunction } from "../replay/recorder.ts";
 import { setAttributes } from "../rum/attributes.ts";
 import { recordException } from "../rum/exceptions.ts";
-import { startInteraction } from "../rum/interactions.ts";
 import { setUser } from "../rum/user.ts";
+import {
+  bodiesSentTo,
+  isReplay,
+  load,
+  logRecords,
+  requests,
+  resetAroundEachTest,
+  rumBodies,
+  sentTo,
+  started,
+  type OtlpJson,
+} from "./test-harness.ts";
 
-type InitModule = typeof import("./init.ts");
-
-interface Request {
-  url: string;
-  init: RequestInit | undefined;
-}
-
-let copy = 0;
-let requests: Request[] = [];
-let api: InitModule | undefined;
-
-// Each test gets its own copy of the module since init() runs once per module and page
-async function load(): Promise<InitModule> {
-  copy += 1;
-
-  const url = `./init.ts?copy=${String(copy)}`;
-  api = (await import(/* @vite-ignore */ url)) as InitModule;
-
-  return api;
-}
-
-async function started(module: InitModule): Promise<string> {
-  await vi.waitFor(() => {
-    expect(module.getSessionId()).not.toBeNull();
-  });
-
-  return module.getSessionId() ?? "";
-}
+resetAroundEachTest();
 
 function storedSessionId(): string | undefined {
   const stored = localStorage.getItem("opentelemetry-session");
@@ -54,38 +31,8 @@ function storedSessionId(): string | undefined {
     : (JSON.parse(stored) as { id: string }).id;
 }
 
-function sentTo(path: string): Request[] {
-  return requests.filter((r) => r.url.endsWith(path));
-}
-
-async function gunzip(body: unknown): Promise<string> {
-  const stream = new Blob([body as Uint8Array<ArrayBuffer>])
-    .stream()
-    .pipeThrough(new DecompressionStream("gzip"));
-
-  return new Response(stream).text();
-}
-
-// Every exporter sends gzip-compressed OTLP/JSON
-function bodiesSentTo(path: string): Promise<string[]> {
-  return Promise.all(sentTo(path).map((r) => gunzip(r.init?.body)));
-}
-
-function isReplay(body: string): boolean {
-  return body.includes('"name":"rum.rr-web"');
-}
-
-async function rumBodies(path: string): Promise<string> {
-  return (await bodiesSentTo(path)).filter((b) => !isReplay(b)).join("\n");
-}
-
 async function replayBodies(): Promise<string[]> {
   return (await bodiesSentTo("/otel/v1/logs")).filter(isReplay);
-}
-
-interface OtlpJson {
-  resourceSpans?: { scopeSpans: { spans: unknown[] }[] }[];
-  resourceLogs?: { scopeLogs: { logRecords: unknown[] }[] }[];
 }
 
 // The number of spans or log records in one OTLP/JSON request body
@@ -100,60 +47,6 @@ function recordCount(body: string | undefined): number {
 
   return spans.length + records.length;
 }
-
-interface LogRecordJson {
-  eventName?: string;
-  traceId?: string;
-  spanId?: string;
-}
-
-function logRecords(bodies: string): LogRecordJson[] {
-  return bodies
-    .split("\n")
-    .filter((body) => body !== "")
-    .flatMap((body) =>
-      ((JSON.parse(body) as OtlpJson).resourceLogs ?? []).flatMap((r) =>
-        r.scopeLogs.flatMap((s) => s.logRecords as LogRecordJson[]),
-      ),
-    );
-}
-
-beforeEach(() => {
-  requests = [];
-  localStorage.clear();
-  Reflect.deleteProperty(
-    globalThis,
-    Symbol.for("@clickhouse/clickstack-browser"),
-  );
-
-  vi.stubGlobal(
-    "fetch",
-    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      requests.push({
-        url: input instanceof Request ? input.url : String(input),
-        init,
-      });
-      return Promise.resolve(new Response("ok"));
-    }),
-  );
-});
-
-afterEach(async () => {
-  await api?.shutdown();
-
-  api = undefined;
-  setUser(null);
-  setAttributes(null);
-
-  vi.unstubAllGlobals();
-  vi.restoreAllMocks();
-
-  trace.disable();
-  context.disable();
-  propagation.disable();
-  logs.disable();
-  diag.disable();
-});
 
 test("sends spans with the session, the user and the resource to the endpoint", async () => {
   setUser({ id: "user-1" });
@@ -284,152 +177,17 @@ test("hands ended spans to spanProcessors with the attributes this package adds"
   expect(await rumBodies("/otel/v1/traces")).toContain("action example");
 });
 
-async function initWithInteractions(
-  interactions: boolean,
-): Promise<{ module: InitModule; ended: ReadableSpan[] }> {
-  const ended: ReadableSpan[] = [];
+test("sends web vitals with no trace, even while an interaction is open", async () => {
   const module = await load();
   module.init({
     endpoint: "/otel",
     serviceName: "web-app",
     replay: false,
-    interactions,
-    spanProcessors: [
-      {
-        onStart: () => undefined,
-        onEnd: (span) => ended.push(span),
-        forceFlush: () => Promise.resolve(),
-        shutdown: () => Promise.resolve(),
-      },
-    ],
+    interactions: true,
   });
   await started(module);
-  return { module, ended };
-}
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-test("puts spans started after an await on the click's trace, and ends the click once idle", async () => {
-  const { ended } = await initWithInteractions(true);
-  const tracer = trace.getTracer("test");
-
-  document.body.click();
-  await sleep(10);
-  const action = tracer.startSpan("action example");
-  await sleep(1100);
-  expect(ended.map((span) => span.name)).not.toContain("click");
-  action.end();
-  await vi.waitFor(
-    () => {
-      expect(ended.map((span) => span.name)).toContain("click");
-    },
-    { timeout: 2000 },
-  );
-
-  const click = ended.find((span) => span.name === "click");
-  expect(click?.instrumentationScope.name).toBe("custom-action");
-  expect(click?.parentSpanContext).toBeUndefined();
-  expect(action.spanContext().traceId).toBe(click?.spanContext().traceId);
-  expect(
-    ended.find((span) => span.name === "action example")?.parentSpanContext
-      ?.spanId,
-  ).toBe(click?.spanContext().spanId);
-});
-
-test("replaces the open interaction on a submit, and keeps it for startInteraction without replace", async () => {
-  const { ended } = await initWithInteractions(true);
-  const tracer = trace.getTracer("test");
-
-  document.body.click();
-  const message = startInteraction("receive room:*", { replace: false });
-  const inClick = tracer.startSpan("in the click");
-  inClick.end();
-  document.body.dispatchEvent(new Event("submit"));
-  const inSubmit = tracer.startSpan("in the submit");
-  inSubmit.end();
-
-  expect(trace.getSpan(message)?.spanContext().traceId).toBe(
-    inClick.spanContext().traceId,
-  );
-  expect(ended.map((span) => span.name)).toContain("click");
-  expect(ended.map((span) => span.name)).not.toContain("receive room:*");
-  expect(inSubmit.spanContext().traceId).not.toBe(
-    inClick.spanContext().traceId,
-  );
-  expect(
-    context.with(trace.setSpan(ROOT_CONTEXT, inClick), () =>
-      trace.getActiveSpan(),
-    ),
-  ).toBe(inClick);
-  const bound = context.bind(trace.setSpan(ROOT_CONTEXT, inClick), () =>
-    trace.getActiveSpan(),
-  );
-  expect(bound()).toBe(inClick);
-  expect(context.bind(ROOT_CONTEXT, "not a function")).toBe("not a function");
-});
-
-test("ends the open interaction on shutdown and starts none after it", async () => {
-  const { module, ended } = await initWithInteractions(true);
-
-  document.body.click();
-  await module.shutdown();
-  document.body.click();
-
-  expect(ended.filter((span) => span.name === "click")).toHaveLength(1);
-});
-
-test("starts a pageload interaction once started, which spans and errors with no active span join", async () => {
-  const { module, ended } = await initWithInteractions(true);
-
-  const action = trace.getTracer("test").startSpan("action example");
-  action.end();
-  recordException(new Error("load-time error"));
-  await vi.waitFor(
-    () => {
-      expect(ended.map((span) => span.name)).toContain("pageload");
-    },
-    { timeout: 2000 },
-  );
-  await module.shutdown();
-
-  const pageload = ended.find((span) => span.name === "pageload");
-  expect(pageload?.instrumentationScope.name).toBe("custom-action");
-  expect(pageload?.parentSpanContext).toBeUndefined();
-  expect(action.spanContext().traceId).toBe(pageload?.spanContext().traceId);
-  const error = logRecords(await rumBodies("/otel/v1/logs")).find((record) =>
-    JSON.stringify(record).includes("load-time error"),
-  );
-  expect(error?.traceId).toBe(pageload?.spanContext().traceId);
-});
-
-test("keeps a click's own interaction when it comes during the pageload", async () => {
-  const { ended } = await initWithInteractions(true);
-
-  document.body.click();
-  const inClick = trace.getTracer("test").startSpan("in the click");
-  inClick.end();
-  await vi.waitFor(
-    () => {
-      expect(ended.map((span) => span.name)).toContain("click");
-    },
-    { timeout: 2000 },
-  );
-
-  const click = ended.find((span) => span.name === "click");
-  const pageload = ended.find((span) => span.name === "pageload");
-  expect(pageload).toBeDefined();
-  expect(inClick.spanContext().traceId).toBe(click?.spanContext().traceId);
-  expect(click?.spanContext().traceId).not.toBe(
-    pageload?.spanContext().traceId,
-  );
-});
-
-test("sends web vitals with no trace, even while an interaction is open", async () => {
-  const { module } = await initWithInteractions(true);
-
-  await sleep(200);
+  await new Promise((resolve) => setTimeout(resolve, 200));
   await module.shutdown();
 
   const vitals = logRecords(await rumBodies("/otel/v1/logs")).filter(
@@ -440,26 +198,6 @@ test("sends web vitals with no trace, even while an interaction is open", async 
     expect(vital.traceId ?? "").toBe("");
     expect(vital.spanId ?? "").toBe("");
   }
-});
-
-test("starts no interaction without the interactions option", async () => {
-  const { ended } = await initWithInteractions(false);
-  const tracer = trace.getTracer("test");
-
-  document.body.click();
-  expect(startInteraction("navigate lessons", { replace: true })).toBe(
-    context.active(),
-  );
-  await sleep(10);
-  const action = tracer.startSpan("action example");
-  action.end();
-  await sleep(1100);
-
-  expect(ended.map((span) => span.name)).not.toContain("click");
-  expect(ended.map((span) => span.name)).not.toContain("navigate lessons");
-  expect(
-    ended.find((span) => span.name === "action example")?.parentSpanContext,
-  ).toBeUndefined();
 });
 
 test("takes session ids from sessionIdGenerator and keeps sessions in sessionStore", async () => {

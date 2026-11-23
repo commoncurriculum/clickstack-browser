@@ -74,8 +74,7 @@ import {
 import {
   interactionContextManager,
   interactionSpanProcessor,
-  listenForInteractions,
-  startInteraction,
+  trackInteractions,
 } from "../rum/interactions.ts";
 import { userLogRecordProcessor, userSpanProcessor } from "../rum/user.ts";
 import { VERSION } from "../version.ts";
@@ -203,9 +202,9 @@ export interface ClickStackBrowserCommonOptions {
   spanProcessors?: SpanProcessor[] | undefined;
   /**
    * Starts an interaction span named `pageload` once the SDK has started, one on each click and
-   * submit, and one on {@link startInteraction}. Spans
-   * started with no active span, such as after an `await`, join the open interaction's trace. It
-   * ends 1 s after its last span ends, or after 30 s, like Sentry's idle spans. Default: `false`,
+   * submit, and one on {@link startInteraction}. Spans started with no active span, such as after
+   * an `await`, join the open interaction's trace. It ends 1 s after its last span ends, or after
+   * 30 s, like Sentry's idle spans. Default: `false`,
    * the active context is kept only for synchronous code.
    */
   interactions?: boolean | undefined;
@@ -519,8 +518,7 @@ async function start(
     instrumentations,
   });
   if (options.interactions) {
-    run.stopInteractions = listenForInteractions();
-    startInteraction("pageload", { replace: false });
+    run.stopInteractions = trackInteractions();
   }
   for (const warning of warnings) {
     diag.warn(`@clickhouse/clickstack-browser: ${warning}`);
