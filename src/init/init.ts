@@ -2,6 +2,7 @@ import {
   diag,
   DiagConsoleLogger,
   DiagLogLevel,
+  ROOT_CONTEXT,
   type Attributes,
 } from "@opentelemetry/api";
 import {
@@ -73,7 +74,7 @@ import {
 import {
   interactionContextManager,
   interactionSpanProcessor,
-  listenForInteractions,
+  trackInteractions,
 } from "../rum/interactions.ts";
 import { userLogRecordProcessor, userSpanProcessor } from "../rum/user.ts";
 import { VERSION } from "../version.ts";
@@ -200,10 +201,10 @@ export interface ClickStackBrowserCommonOptions {
    */
   spanProcessors?: SpanProcessor[] | undefined;
   /**
-   * Starts an interaction span on each click and submit, and on {@link startInteraction}. Spans
-   * started with no active span, such as after an `await`, join the open interaction's trace. It
-   * ends 1 s after its last span ends, or after 30 s, like Sentry's idle spans. Default: `false`,
-   * the active context is kept only for synchronous code.
+   * Starts an interaction span at page load (`pageload`), on each click and submit, and on
+   * {@link startInteraction}. Spans started with no active span, such as after an `await`, join the
+   * open interaction's trace. It ends 1 s after its last span ends, or after 30 s, like Sentry's
+   * idle spans. Default: `false`, the active context is kept only for synchronous code.
    */
   interactions?: boolean | undefined;
   /**
@@ -449,7 +450,14 @@ async function start(
     options.userAction !== false &&
       new UserActionInstrumentation({ enabled: false }),
     options.webVitals !== false &&
-      new WebVitalsInstrumentation({ enabled: false }),
+      new WebVitalsInstrumentation({
+        enabled: false,
+        // A vital is reported long after it is measured, often on the next click, whose
+        // interaction would otherwise claim it.
+        applyCustomLogRecordData: (record) => {
+          record.context = ROOT_CONTEXT;
+        },
+      }),
     options.longTask !== false &&
       new LongTaskInstrumentation({ enabled: false }),
     consoleLevel &&
@@ -509,7 +517,7 @@ async function start(
     instrumentations,
   });
   if (options.interactions) {
-    run.stopInteractions = listenForInteractions();
+    run.stopInteractions = trackInteractions();
   }
   for (const warning of warnings) {
     diag.warn(`@clickhouse/clickstack-browser: ${warning}`);

@@ -143,12 +143,13 @@ export const interactionSpanProcessor: SpanProcessor = {
 };
 
 /**
- * Starts an interaction on each click and submit.
+ * Starts a `pageload` interaction, then one on each click and submit.
  *
  * @returns A function that stops listening.
  * @internal
  */
-export function listenForInteractions(): () => void {
+export function trackInteractions(): () => void {
+  startInteraction("pageload", { replace: false });
   const listeners = (["click", "submit"] as const).map((type) => {
     const listener = () => startInteraction(type, { replace: true });
     document.addEventListener(type, listener, { capture: true });
