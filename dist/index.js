@@ -495,12 +495,13 @@ const interactionSpanProcessor = {
 	}
 };
 /**
-* Starts an interaction on each click and submit.
+* Starts a `pageload` interaction, then one on each click and submit.
 *
 * @returns A function that stops listening.
 * @internal
 */
-function listenForInteractions() {
+function trackInteractions() {
+	startInteraction("pageload", { replace: false });
 	const listeners = ["click", "submit"].map((type) => {
 		const listener = () => startInteraction(type, { replace: true });
 		document.addEventListener(type, listener, { capture: true });
@@ -765,10 +766,7 @@ async function start(options, tracesUrl, logsUrl, warnings) {
 		},
 		instrumentations
 	});
-	if (options.interactions) {
-		run.stopInteractions = listenForInteractions();
-		startInteraction("pageload", { replace: false });
-	}
+	if (options.interactions) run.stopInteractions = trackInteractions();
 	for (const warning of warnings) diag.warn(`@clickhouse/clickstack-browser: ${warning}`);
 	if (options.replay !== false) await startRecorder(options, sessionManager, logsUrl, resourceAttributes, sanitizeUrl);
 }
