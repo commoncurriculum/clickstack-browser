@@ -1,0 +1,146 @@
+{
+  "name": "@clickhouse/clickstack-browser",
+  "version": "1.2.1",
+  "private": false,
+  "description": "OpenTelemetry browser RUM and session replay for ClickStack and ClickHouse Observability",
+  "keywords": [
+    "clickhouse",
+    "clickstack",
+    "opentelemetry",
+    "otel",
+    "rum",
+    "user",
+    "metrics",
+    "session-replay",
+    "session",
+    "replay",
+    "web",
+    "browser"
+  ],
+  "homepage": "https://github.com/ClickHouse/clickstack-browser",
+  "bugs": {
+    "url": "https://github.com/ClickHouse/clickstack-browser/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ClickHouse/clickstack-browser.git"
+  },
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./replay": {
+      "types": "./dist/replay.d.ts",
+      "default": "./dist/replay.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "unpkg": "./dist/clickstack.iife.js",
+  "jsdelivr": "./dist/clickstack.iife.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.node.json",
+    "lint": "eslint --max-warnings 0 .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run --coverage",
+    "test:node": "node --test \"e2e/*.test.mjs\"",
+    "test:e2e": "playwright test",
+    "size": "size-limit",
+    "spell": "cspell lint --no-progress --dot --gitignore \"**\"",
+    "pack:check": "node -e \"require('node:fs').mkdirSync('pack', { recursive: true })\" && npm pack --pack-destination pack --silent && publint --strict pack/*.tgz && attw --profile esm-only pack/*.tgz",
+    "check": "npm run spell && npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build && npm run test:node && npm run size && npm run pack:check && npm run test:e2e"
+  },
+  "dependencies": {
+    "@opentelemetry/api-logs": "^0.223.0",
+    "@opentelemetry/browser-instrumentation": "^0.9.0",
+    "@opentelemetry/core": "^2.12.0",
+    "@opentelemetry/instrumentation-long-task": "^0.67.0",
+    "@opentelemetry/otlp-transformer": "^0.223.0",
+    "@opentelemetry/resources": "^2.12.0",
+    "@opentelemetry/sdk-logs": "^0.223.0",
+    "@opentelemetry/sdk-trace": "^2.12.0",
+    "@opentelemetry/semantic-conventions": "^1.43.0",
+    "@rrweb/record": "~2.2.0"
+  },
+  "peerDependencies": {
+    "@opentelemetry/api": ">=1.9.1 <1.10.0",
+    "@opentelemetry/browser-sdk": "^0.6.0"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
+    "@eslint-community/eslint-plugin-eslint-comments": "4.8.1",
+    "@eslint/js": "10.0.1",
+    "@opentelemetry/api": "1.9.1",
+    "@opentelemetry/browser-sdk": "0.6.0",
+    "@playwright/test": "1.64.1",
+    "@rrweb/types": "2.2.0",
+    "@size-limit/preset-small-lib": "14.2.0",
+    "@types/node": "24.19.2",
+    "@vitest/browser-playwright": "5.0.5",
+    "@vitest/coverage-v8": "5.0.5",
+    "cspell": "10.4.0",
+    "eslint": "10.13.0",
+    "eslint-plugin-baseline-js": "0.7.5",
+    "eslint-plugin-tsdoc": "0.5.4",
+    "globals": "17.13.0",
+    "playwright": "1.64.1",
+    "prettier": "3.9.10",
+    "publint": "0.3.25",
+    "size-limit": "14.2.0",
+    "tsdown": "0.23.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.0",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^24.11.0 || >=26.0.0",
+      "onFail": "error"
+    },
+    "packageManager": {
+      "name": "npm",
+      "version": ">=11.11.0 <12",
+      "onFail": "error"
+    }
+  },
+  "packageManager": "npm@11.19.1",
+  "size-limit": [
+    {
+      "name": "npm: .",
+      "path": "dist/index.js",
+      "import": "{ init, setUser, setAttributes, getSessionId, startNewSession, recordException, startInteraction, pauseReplay, resumeReplay, shutdown }",
+      "ignore": [
+        "@opentelemetry"
+      ],
+      "gzip": true,
+      "limit": "33 kB"
+    },
+    {
+      "name": "npm: ./replay",
+      "path": "dist/replay.js",
+      "import": "{ startReplay }",
+      "ignore": [
+        "@opentelemetry"
+      ],
+      "gzip": true,
+      "limit": "30 kB"
+    },
+    {
+      "name": "IIFE: dist/clickstack.iife.js",
+      "path": "dist/clickstack.iife.js",
+      "rolldown": false,
+      "gzip": true,
+      "limit": "70 kB"
+    }
+  ]
+}
