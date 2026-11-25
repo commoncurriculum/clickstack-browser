@@ -24,6 +24,7 @@ export type {
 export type { RecordFunction, ReplayRecording } from "./replay/recorder.ts";
 export { setAttributes } from "./rum/attributes.ts";
 export { recordException } from "./rum/exceptions.ts";
+export type { RecordExceptionOptions } from "./rum/exceptions.ts";
 export { startInteraction } from "./rum/interactions.ts";
 export { setUser } from "./rum/user.ts";
 export type { User } from "./rum/user.ts";

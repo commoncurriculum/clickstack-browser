@@ -1,4 +1,4 @@
-import type { Attributes } from "@opentelemetry/api";
+import { diag, type Attributes } from "@opentelemetry/api";
 import { SeverityNumber } from "@opentelemetry/api-logs";
 import { ErrorsInstrumentation } from "@opentelemetry/browser-instrumentation/experimental/errors";
 import type { LogRecordProcessor } from "@opentelemetry/sdk-logs";
@@ -228,14 +228,29 @@ export const consoleExceptionProcessor: LogRecordProcessor = {
  *
  * @param error - The caught value. Values that are not errors are recorded as JSON text.
  * @param attributes - Further attributes for the event. Default: none.
+ * @param options - The event's severity. Default: `SeverityNumber.ERROR`.
  * @public
  */
-export function recordException(error: unknown, attributes?: Attributes): void {
+export function recordException(
+  error: unknown,
+  attributes?: Attributes,
+  options?: RecordExceptionOptions,
+): void {
   logs.getLogger(SCOPE, VERSION).emit({
     eventName: "exception",
-    severityNumber: SeverityNumber.ERROR,
+    severityNumber: options?.severityNumber ?? SeverityNumber.ERROR,
     attributes: { ...exceptionAttributes(error), ...attributes },
   });
+}
+
+/**
+ * Options for {@link recordException}.
+ *
+ * @public
+ */
+export interface RecordExceptionOptions {
+  /** The event's severity, such as `SeverityNumber.FATAL`. Default: `SeverityNumber.ERROR`. */
+  severityNumber?: SeverityNumber | undefined;
 }
 
 /**
@@ -295,8 +310,17 @@ export class ErrorsAndResourceLoadsInstrumentation extends ErrorsInstrumentation
   #sanitizeUrl: ((url: string) => string) | undefined;
   #stopResourceErrors: (() => void) | undefined;
 
-  constructor(sanitizeUrl: ((url: string) => string) | undefined) {
-    super({ enabled: false, applyCustomAttributes: exceptionAttributes });
+  constructor(
+    sanitizeUrl: ((url: string) => string) | undefined,
+    customAttributes: ((error: unknown) => Attributes) | undefined,
+  ) {
+    super({
+      enabled: false,
+      applyCustomAttributes: (error) => ({
+        ...exceptionAttributes(error),
+        ...guardedAttributes(customAttributes, error),
+      }),
+    });
     this.#sanitizeUrl = sanitizeUrl;
   }
 
@@ -309,6 +333,27 @@ export class ErrorsAndResourceLoadsInstrumentation extends ErrorsInstrumentation
     super.disable();
     this.#stopResourceErrors?.();
     this.#stopResourceErrors = undefined;
+  }
+}
+
+// A hook that throws or returns a non-object adds nothing, so the event keeps its exception.*
+// attributes.
+function guardedAttributes(
+  hook: ((error: unknown) => Attributes) | undefined,
+  error: unknown,
+): Attributes {
+  if (hook === undefined) {
+    return {};
+  }
+
+  try {
+    const attributes: unknown = hook(error);
+    return typeof attributes === "object" && attributes !== null
+      ? (attributes as Attributes)
+      : {};
+  } catch (hookError) {
+    diag.error("exceptionAttributes hook failed", hookError);
+    return {};
   }
 }
 
