@@ -1,4 +1,4 @@
-import { diag, trace } from "@opentelemetry/api";
+import { type Attributes, diag, trace } from "@opentelemetry/api";
 import { SeverityNumber } from "@opentelemetry/api-logs";
 import {
   SessionManager,
@@ -588,7 +588,7 @@ test("an exceptionAttributes hook that throws leaves the exception attributes", 
 
   window.dispatchEvent(
     new ErrorEvent("error", {
-      error: new TypeError("thrown"),
+      error: new TypeError("thrown", { cause: new Error("root") }),
       message: "thrown",
     }),
   );
@@ -599,6 +599,34 @@ test("an exceptionAttributes hook that throws leaves the exception attributes", 
   );
   expect(record && attribute(record, "exception.type")).toBe("TypeError");
   expect(record && attribute(record, "exception.message")).toBe("thrown");
+  expect(record && attribute(record, "exception.stacktrace")).toContain(
+    "Caused by: Error: root",
+  );
+});
+
+test("an exceptionAttributes hook that returns a non-object adds nothing", async () => {
+  const module = await load();
+  module.init({
+    endpoint: "/otel",
+    serviceName: "web-app",
+    replay: false,
+    exceptionAttributes: () => "abc" as unknown as Attributes,
+  });
+  await started(module);
+
+  window.dispatchEvent(
+    new ErrorEvent("error", {
+      error: new TypeError("thrown"),
+      message: "thrown",
+    }),
+  );
+  await module.shutdown();
+
+  const [record] = logRecords(await rumBodies("/otel/v1/logs")).filter(
+    (r) => r.eventName === "exception",
+  );
+  expect(record && attribute(record, "exception.message")).toBe("thrown");
+  expect(record && attribute(record, "0")).toBeUndefined();
 });
 
 test("captures no console calls with console false, and matches origins given as RegExp", async () => {

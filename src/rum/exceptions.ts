@@ -27,7 +27,7 @@ const MAX_CAUSES = 5;
  * @returns The attributes.
  * @internal
  */
-export function exceptionAttributes(value: unknown): Attributes {
+export function semanticExceptionAttributes(value: unknown): Attributes {
   if (typeof value === "string") {
     return { [ATTR_EXCEPTION_MESSAGE]: value };
   }
@@ -200,7 +200,7 @@ export const consoleExceptionProcessor: LogRecordProcessor = {
     consoleError = undefined;
 
     if (error !== undefined && logRecord.eventName === "browser.console") {
-      logRecord.setAttributes(exceptionAttributes(error));
+      logRecord.setAttributes(semanticExceptionAttributes(error));
     }
   },
   forceFlush: () => Promise.resolve(),
@@ -239,7 +239,7 @@ export function recordException(
   logs.getLogger(SCOPE, VERSION).emit({
     eventName: "exception",
     severityNumber: options?.severityNumber ?? SeverityNumber.ERROR,
-    attributes: { ...exceptionAttributes(error), ...attributes },
+    attributes: { ...semanticExceptionAttributes(error), ...attributes },
   });
 }
 
@@ -301,7 +301,7 @@ export function listenForResourceErrors(
 }
 
 /**
- * Upstream's errors instrumentation with {@link exceptionAttributes}, which also records failed
+ * Upstream's errors instrumentation with {@link semanticExceptionAttributes}, which also records failed
  * resource loads ({@link listenForResourceErrors}) while it is enabled.
  *
  * @internal
@@ -317,7 +317,7 @@ export class ErrorsAndResourceLoadsInstrumentation extends ErrorsInstrumentation
     super({
       enabled: false,
       applyCustomAttributes: (error) => ({
-        ...exceptionAttributes(error),
+        ...semanticExceptionAttributes(error),
         ...guardedAttributes(customAttributes, error),
       }),
     });
