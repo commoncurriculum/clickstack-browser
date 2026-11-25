@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { logs } from "../logs-api.ts";
 import {
   consoleExceptionProcessor,
-  exceptionAttributes,
+  semanticExceptionAttributes,
   listenForResourceErrors,
   recordException,
   serializeConsoleArgs,
@@ -39,32 +39,38 @@ test("errors give their type, message and stack; other values become JSON text",
   const circular: Record<string, unknown> = {};
   circular["self"] = circular;
 
-  expect(exceptionAttributes(error)).toEqual({
+  expect(semanticExceptionAttributes(error)).toEqual({
     "exception.type": "TypeError",
     "exception.message": "bad input",
     "exception.stacktrace": error.stack,
   });
   expect(
-    exceptionAttributes({ name: "Error", message: "from a frame", stack: "s" }),
+    semanticExceptionAttributes({
+      name: "Error",
+      message: "from a frame",
+      stack: "s",
+    }),
   ).toEqual({
     "exception.type": "Error",
     "exception.message": "from a frame",
     "exception.stacktrace": "s",
   });
-  expect(exceptionAttributes({ stack: "only a stack" })).toEqual({
+  expect(semanticExceptionAttributes({ stack: "only a stack" })).toEqual({
     "exception.stacktrace": "only a stack",
   });
-  expect(exceptionAttributes("failed")).toEqual({
+  expect(semanticExceptionAttributes("failed")).toEqual({
     "exception.message": "failed",
   });
-  expect(exceptionAttributes({ code: 1 })).toEqual({
+  expect(semanticExceptionAttributes({ code: 1 })).toEqual({
     "exception.message": '{"code":1}',
   });
-  expect(exceptionAttributes(42)).toEqual({ "exception.message": "42" });
-  expect(exceptionAttributes(undefined)).toEqual({
+  expect(semanticExceptionAttributes(42)).toEqual({
+    "exception.message": "42",
+  });
+  expect(semanticExceptionAttributes(undefined)).toEqual({
     "exception.message": "undefined",
   });
-  expect(exceptionAttributes(circular)).toEqual({
+  expect(semanticExceptionAttributes(circular)).toEqual({
     "exception.message": "[object Object]",
   });
 });
@@ -72,7 +78,9 @@ test("errors give their type, message and stack; other values become JSON text",
 test("appends the cause chain to the stack as Caused by sections", () => {
   const cause = new TypeError("Failed to fetch");
   const error = new Error("Checkout failed", { cause });
-  const stack = String(exceptionAttributes(error)["exception.stacktrace"]);
+  const stack = String(
+    semanticExceptionAttributes(error)["exception.stacktrace"],
+  );
 
   expect(stack.startsWith(String(error.stack))).toBe(true);
   expect(stack).toContain(`\nCaused by: ${String(cause.stack)}`);
@@ -83,7 +91,7 @@ test("names frames-only causes, writes other causes as JSON, and stops at a loop
     stack: "fetchCart@app.js:42:9",
   });
   expect(
-    exceptionAttributes({
+    semanticExceptionAttributes({
       message: "outer",
       stack: "outer@app.js:1:1",
       cause: framesOnly,
@@ -92,14 +100,14 @@ test("names frames-only causes, writes other causes as JSON, and stops at a loop
     "outer@app.js:1:1\nCaused by: TypeError: Failed to fetch\nfetchCart@app.js:42:9",
   );
   expect(
-    exceptionAttributes({ message: "outer", cause: { code: 1 } })[
+    semanticExceptionAttributes({ message: "outer", cause: { code: 1 } })[
       "exception.stacktrace"
     ],
   ).toBe('Error: outer\nCaused by: {"code":1}');
 
   const a: Record<string, unknown> = { name: "A", message: "a", stack: "A: a" };
   a["cause"] = { name: "B", message: "b", stack: "B: b", cause: a };
-  expect(exceptionAttributes(a)["exception.stacktrace"]).toBe(
+  expect(semanticExceptionAttributes(a)["exception.stacktrace"]).toBe(
     "A: a\nCaused by: B: b",
   );
 
@@ -108,7 +116,7 @@ test("names frames-only causes, writes other causes as JSON, and stops at a loop
     deep = { message: String(i), stack: `S${String(i)}`, cause: deep };
   }
   expect(
-    String(exceptionAttributes(deep)["exception.stacktrace"]).split(
+    String(semanticExceptionAttributes(deep)["exception.stacktrace"]).split(
       "Caused by:",
     ),
   ).toHaveLength(6);
