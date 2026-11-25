@@ -20,6 +20,16 @@ export interface LogRecordJson {
   eventName?: string;
   traceId?: string;
   spanId?: string;
+  severityNumber?: number;
+  attributes?: { key: string; value: { stringValue?: string } }[];
+}
+
+/** The string value of a log record's attribute. */
+export function attribute(
+  record: LogRecordJson,
+  key: string,
+): string | undefined {
+  return record.attributes?.find((a) => a.key === key)?.value.stringValue;
 }
 
 let copy = 0;

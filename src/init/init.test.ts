@@ -1,4 +1,5 @@
 import { diag, trace } from "@opentelemetry/api";
+import { SeverityNumber } from "@opentelemetry/api-logs";
 import {
   SessionManager,
   type Session,
@@ -10,6 +11,7 @@ import { setAttributes } from "../rum/attributes.ts";
 import { recordException } from "../rum/exceptions.ts";
 import { setUser } from "../rum/user.ts";
 import {
+  attribute,
   bodiesSentTo,
   isReplay,
   load,
@@ -499,6 +501,104 @@ test("recordException sends an exception event under the session", async () => {
   expect(body).toContain(
     '"key":"session.id","value":{"stringValue":"' + sessionId + '"}',
   );
+});
+
+test("recordException sends the severity it is given", async () => {
+  const module = await load();
+  module.init({ endpoint: "/otel", serviceName: "web-app", replay: false });
+  await started(module);
+
+  recordException(new Error("ended the session"), undefined, {
+    severityNumber: SeverityNumber.FATAL,
+  });
+  recordException(new Error("caught"));
+  await module.shutdown();
+
+  const records = logRecords(await rumBodies("/otel/v1/logs")).filter(
+    (record) => record.eventName === "exception",
+  );
+  expect(
+    records.map((record) => [
+      attribute(record, "exception.message"),
+      record.severityNumber,
+    ]),
+  ).toEqual([
+    ["ended the session", SeverityNumber.FATAL],
+    ["caught", SeverityNumber.ERROR],
+  ]);
+});
+
+test("exceptionAttributes adds attributes read from each uncaught error and rejection", async () => {
+  const ids = new WeakMap<object, string>([]);
+  const thrown = new Error("thrown");
+  const rejected = new Error("rejected");
+  ids.set(thrown, "id-1").set(rejected, "id-2");
+  const module = await load();
+  module.init({
+    endpoint: "/otel",
+    serviceName: "web-app",
+    replay: false,
+    exceptionAttributes: (error) =>
+      typeof error === "object" && error !== null
+        ? { "app.error.id": ids.get(error) ?? "none" }
+        : {},
+  });
+  await started(module);
+
+  window.dispatchEvent(
+    new ErrorEvent("error", {
+      error: thrown,
+      message: "thrown",
+      cancelable: true,
+    }),
+  );
+  window.dispatchEvent(
+    new PromiseRejectionEvent("unhandledrejection", {
+      promise: Promise.resolve(),
+      reason: rejected,
+    }),
+  );
+  await module.shutdown();
+
+  const records = logRecords(await rumBodies("/otel/v1/logs")).filter(
+    (record) => record.eventName === "exception",
+  );
+  expect(
+    records.map((record) => [
+      attribute(record, "exception.message"),
+      attribute(record, "app.error.id"),
+    ]),
+  ).toEqual([
+    ["thrown", "id-1"],
+    ["rejected", "id-2"],
+  ]);
+});
+
+test("an exceptionAttributes hook that throws leaves the exception attributes", async () => {
+  const module = await load();
+  module.init({
+    endpoint: "/otel",
+    serviceName: "web-app",
+    replay: false,
+    exceptionAttributes: () => {
+      throw new Error("hook broke");
+    },
+  });
+  await started(module);
+
+  window.dispatchEvent(
+    new ErrorEvent("error", {
+      error: new TypeError("thrown"),
+      message: "thrown",
+    }),
+  );
+  await module.shutdown();
+
+  const [record] = logRecords(await rumBodies("/otel/v1/logs")).filter(
+    (r) => r.eventName === "exception",
+  );
+  expect(record && attribute(record, "exception.type")).toBe("TypeError");
+  expect(record && attribute(record, "exception.message")).toBe("thrown");
 });
 
 test("captures no console calls with console false, and matches origins given as RegExp", async () => {

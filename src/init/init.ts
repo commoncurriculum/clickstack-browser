@@ -165,6 +165,12 @@ export interface ClickStackBrowserCommonOptions {
    * Default: `true`.
    */
   errors?: boolean | undefined;
+  /**
+   * Further attributes for the `exception` event of each uncaught error and unhandled rejection,
+   * read from the thrown value, for example the id another error tracker gave the same error. A
+   * hook that throws or returns a non-object adds nothing. Default: none.
+   */
+  exceptionAttributes?: ((error: unknown) => Attributes) | undefined;
   /** Records `browser.navigation` events. Default: `true`. */
   navigation?: boolean | undefined;
   /** Records a `browser.navigation_timing` event for the page load. Default: `true`. */
@@ -244,6 +250,7 @@ const OPTION_NAMES = new Set(
     fetch: true,
     xhr: true,
     errors: true,
+    exceptionAttributes: true,
     navigation: true,
     navigationTiming: true,
     resourceTiming: true,
@@ -442,7 +449,10 @@ async function start(
     options.resourceTiming !== false &&
       new ResourceTimingInstrumentation({ enabled: false, ignoreUrls }),
     options.errors !== false &&
-      new ErrorsAndResourceLoadsInstrumentation(sanitizeUrl),
+      new ErrorsAndResourceLoadsInstrumentation(
+        sanitizeUrl,
+        options.exceptionAttributes,
+      ),
     options.navigation !== false &&
       new NavigationInstrumentation({ enabled: false, ...sanitize }),
     options.navigationTiming !== false &&
