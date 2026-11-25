@@ -3,6 +3,7 @@ import { Attributes, Context } from "@opentelemetry/api";
 import { SessionIdGenerator, SessionStore } from "@opentelemetry/browser-sdk/session";
 import "@opentelemetry/sdk-logs";
 import { SpanProcessor } from "@opentelemetry/sdk-trace";
+import { SeverityNumber } from "@opentelemetry/api-logs";
 import { ErrorsInstrumentation } from "@opentelemetry/browser-instrumentation/experimental/errors";
 /**
  * How much of the console is captured as `browser.console` log events. Each level includes the
@@ -80,6 +81,12 @@ interface ClickStackBrowserCommonOptions {
    * Default: `true`.
    */
   errors?: boolean | undefined;
+  /**
+   * Further attributes for the `exception` event of each uncaught error and unhandled rejection,
+   * read from the thrown value, for example the id another error tracker gave the same error. A
+   * hook that throws or returns a non-object adds nothing. Default: none.
+   */
+  exceptionAttributes?: ((error: unknown) => Attributes) | undefined;
   /** Records `browser.navigation` events. Default: `true`. */
   navigation?: boolean | undefined;
   /** Records a `browser.navigation_timing` event for the page load. Default: `true`. */
@@ -240,9 +247,19 @@ export declare function setAttributes(attributes: Attributes | null): void;
  *
  * @param error - The caught value. Values that are not errors are recorded as JSON text.
  * @param attributes - Further attributes for the event. Default: none.
+ * @param options - The event's severity. Default: `SeverityNumber.ERROR`.
  * @public
  */
-export declare function recordException(error: unknown, attributes?: Attributes): void;
+export declare function recordException(error: unknown, attributes?: Attributes, options?: RecordExceptionOptions): void;
+/**
+ * Options for {@link recordException}.
+ *
+ * @public
+ */
+interface RecordExceptionOptions {
+  /** The event's severity, such as `SeverityNumber.FATAL`. Default: `SeverityNumber.ERROR`. */
+  severityNumber?: SeverityNumber | undefined;
+}
 /**
  * Starts an interaction: a span that spans started with no active span join, until it has been
  * idle for 1 s after its last span ended, or for 30 s at most, like Sentry's idle spans. Clicks and
@@ -289,4 +306,4 @@ interface User {
  * @public
  */
 export declare function setUser(user: User | null): void;
-export type { ClickStackBrowserCommonOptions, ClickStackBrowserOptions, ConsoleLevel, RecordFunction, ReplayRecording, User };
+export type { ClickStackBrowserCommonOptions, ClickStackBrowserOptions, ConsoleLevel, RecordExceptionOptions, RecordFunction, ReplayRecording, User };

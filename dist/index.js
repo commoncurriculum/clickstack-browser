@@ -261,12 +261,13 @@ const consoleExceptionProcessor = {
 *
 * @param error - The caught value. Values that are not errors are recorded as JSON text.
 * @param attributes - Further attributes for the event. Default: none.
+* @param options - The event's severity. Default: `SeverityNumber.ERROR`.
 * @public
 */
-function recordException(error, attributes) {
+function recordException(error, attributes, options) {
 	logs.getLogger(SCOPE, VERSION).emit({
 		eventName: "exception",
-		severityNumber: SeverityNumber.ERROR,
+		severityNumber: options?.severityNumber ?? SeverityNumber.ERROR,
 		attributes: {
 			...exceptionAttributes(error),
 			...attributes
@@ -316,10 +317,13 @@ function listenForResourceErrors(sanitizeUrl) {
 var ErrorsAndResourceLoadsInstrumentation = class extends ErrorsInstrumentation {
 	#sanitizeUrl;
 	#stopResourceErrors;
-	constructor(sanitizeUrl) {
+	constructor(sanitizeUrl, customAttributes) {
 		super({
 			enabled: false,
-			applyCustomAttributes: exceptionAttributes
+			applyCustomAttributes: (error) => ({
+				...exceptionAttributes(error),
+				...guardedAttributes(customAttributes, error)
+			})
 		});
 		this.#sanitizeUrl = sanitizeUrl;
 	}
@@ -333,6 +337,16 @@ var ErrorsAndResourceLoadsInstrumentation = class extends ErrorsInstrumentation 
 		this.#stopResourceErrors = void 0;
 	}
 };
+function guardedAttributes(hook, error) {
+	if (hook === void 0) return {};
+	try {
+		const attributes = hook(error);
+		return typeof attributes === "object" && attributes !== null ? attributes : {};
+	} catch (hookError) {
+		diag.error("exceptionAttributes hook failed", hookError);
+		return {};
+	}
+}
 function resourceUrl(element) {
 	if (element instanceof HTMLImageElement || element instanceof HTMLMediaElement) return element.currentSrc || element.src;
 	if (element instanceof HTMLScriptElement || element instanceof HTMLSourceElement || element instanceof HTMLTrackElement) return element.src;
@@ -595,6 +609,7 @@ const OPTION_NAMES = new Set(Object.keys({
 	fetch: true,
 	xhr: true,
 	errors: true,
+	exceptionAttributes: true,
 	navigation: true,
 	navigationTiming: true,
 	resourceTiming: true,
@@ -713,7 +728,7 @@ async function start(options, tracesUrl, logsUrl, warnings) {
 			enabled: false,
 			ignoreUrls
 		}),
-		options.errors !== false && new ErrorsAndResourceLoadsInstrumentation(sanitizeUrl),
+		options.errors !== false && new ErrorsAndResourceLoadsInstrumentation(sanitizeUrl, options.exceptionAttributes),
 		options.navigation !== false && new NavigationInstrumentation({
 			enabled: false,
 			...sanitize
